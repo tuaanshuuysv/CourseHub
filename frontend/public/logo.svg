@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 42" width="210" height="42" fill="none">
+  <rect x="2" y="3" width="36" height="36" rx="11" fill="#0f766e"/>
+  <path d="M11 15C11 13.9 11.9 13 13 13H19V29H13C11.9 29 11 28.1 11 27V15Z" fill="#ffffff"/>
+  <path d="M21 13H27C28.1 13 29 13.9 29 15V27C29 28.1 28.1 29 27 29H21V13Z" fill="#99f6e4"/>
+  <circle cx="33" cy="9" r="5" fill="#f97316" stroke="#ffffff" stroke-width="2"/>
+  <text x="48" y="28" font-family="Outfit, Be Vietnam Pro, sans-serif" font-size="22" font-weight="800" letter-spacing="-0.5" fill="#18181b">Course<tspan fill="#0f766e">Hub</tspan></text>
+</svg>
