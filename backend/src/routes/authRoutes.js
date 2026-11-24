@@ -5,6 +5,7 @@ import User from '../models/User.js';
 import Student from '../models/Student.js';
 import Cart from '../models/Cart.js';
 import LearningStreak from '../models/LearningStreak.js';
+import { setAuthCookie, signToken } from '../middleware/auth.js';
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -101,6 +102,81 @@ router.post('/verify-otp', async (req, res, next) => {
     await user.save();
 
     return res.json({ message: 'Account verified successfully' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-1.2 Dang nhap he thong cho ca 3 vai tro (Hoc vien, Giang vien, Quan tri vien)
+router.post('/login', async (req, res, next) => {
+  try {
+    const { email, password } = req.body || {};
+    const normalizedEmail = typeof email === 'string' ? email.toLowerCase().trim() : '';
+
+    if (!normalizedEmail || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    // Kiem tra tai khoan Quan tri vien truoc (select them password vi schema an mac dinh)
+    const admin = await Admin.findOne({ email: normalizedEmail }).select('+password');
+    if (admin) {
+      const ok = await bcrypt.compare(String(password), admin.password);
+      if (!ok) {
+        return res.status(401).json({ message: 'Invalid email or password' });
+      }
+      if (!admin.isApproved) {
+        return res.status(403).json({ message: 'Admin account is not approved' });
+      }
+
+      const token = signToken({ id: admin._id.toString(), role: 'admin' });
+      setAuthCookie(res, token);
+      return res.json({
+        message: 'Login successful',
+        token,
+        user: {
+          id: admin._id,
+          name: admin.name,
+          email: admin.email,
+          role: 'admin',
+          pfpImg: '/media/avatar/02.jpg',
+        },
+      });
+    }
+
+    // Kiem tra tai khoan Nguoi dung (Hoc vien / Giang vien)
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+    const ok = await bcrypt.compare(String(password), user.password);
+    if (!ok) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+    if (!user.isVerified) {
+      return res.status(403).json({
+        message: 'Please verify your email OTP before signing in',
+        needsVerify: true,
+      });
+    }
+    if (!user.isActivated) {
+      return res.status(403).json({ message: 'Account is currently blocked by Administrator' });
+    }
+
+    const token = signToken({ id: user._id.toString(), role: user.role });
+    setAuthCookie(res, token);
+    return res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        pfpImg: user.pfpImg,
+        bio: user.bio,
+        phonenumber: user.phonenumber,
+      },
+    });
   } catch (err) {
     return next(err);
   }
