@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import Admin from '../models/Admin.js';
 import User from '../models/User.js';
@@ -15,7 +16,63 @@ import Review from '../models/Review.js';
 import DraftVideo from '../models/DraftVideo.js';
 import { connectDB } from '../config/db.js';
 
-// Khoi tao du lieu mau cho 14 collections neu database dang trong
+// Ham tro giup tao danh sach tien do bai giang khop voi so bai hoan thanh
+function buildLectureProgress(lectures, completedCount, inProgressIndex = -1, inProgressPosSec = 0) {
+  let totalTimeSpentSec = 0;
+  const items = lectures.map((lecture, index) => {
+    if (index < completedCount) {
+      totalTimeSpentSec += lecture.duration;
+      return {
+        lectureId: lecture._id,
+        status: 'Completed',
+        durationSec: lecture.duration,
+        lastPositionSec: lecture.duration,
+        totalTimeSpentSec: lecture.duration,
+        viewCount: 1,
+        completedAt: new Date(),
+        lastActivityAt: new Date(),
+      };
+    }
+    if (index === inProgressIndex) {
+      totalTimeSpentSec += inProgressPosSec;
+      return {
+        lectureId: lecture._id,
+        status: 'In_Progress',
+        durationSec: lecture.duration,
+        lastPositionSec: inProgressPosSec,
+        totalTimeSpentSec: inProgressPosSec,
+        viewCount: 1,
+        lastActivityAt: new Date(),
+      };
+    }
+    return {
+      lectureId: lecture._id,
+      status: 'Not_Started',
+      durationSec: lecture.duration,
+      lastPositionSec: 0,
+      totalTimeSpentSec: 0,
+      viewCount: 0,
+    };
+  });
+
+  const lastLectureIndex =
+    inProgressIndex >= 0
+      ? inProgressIndex
+      : completedCount > 0
+        ? Math.min(completedCount - 1, lectures.length - 1)
+        : 0;
+
+  return {
+    completedLecturesCount: completedCount,
+    totalLectures: lectures.length,
+    totalTimeSpentSec,
+    lastLectureId: lectures[lastLectureIndex]?._id,
+    lastPositionSec: inProgressIndex >= 0 ? inProgressPosSec : 0,
+    lectures: items,
+  };
+}
+
+// Khoi tao du lieu mau dong bo cho 14 collections neu database dang trong
 export async function ensureSeeded() {
   const existingUsers = await User.countDocuments();
   if (existingUsers > 0) return;
@@ -132,17 +189,17 @@ export async function ensureSeeded() {
     isActivated: true,
   });
 
-  // 3. Khoi tao danh muc khoa hoc (Category)
+  // 3. Khoi tao danh muc khoa hoc (Category) voi slug dong bo
   const categories = await Category.insertMany([
     { name: 'Web Development', slug: 'web-development', color: '#0f766e', description: 'React, MERN Stack, GraphQL, and full-stack web engineering.' },
     { name: 'UI/UX Design', slug: 'ui-ux-design', color: '#ea580c', description: 'Figma design systems, prototyping, and product thinking.' },
-    { name: 'Data Science & Analytics', slug: 'data-science-ai', color: '#4f46e5', description: 'Python, Data Analysis, Statistical Modeling, and data pipelines.' },
+    { name: 'Data Science & Analytics', slug: 'data-science-analytics', color: '#4f46e5', description: 'Python, Data Analysis, Statistical Modeling, and data pipelines.' },
     { name: 'Mobile Engineering', slug: 'mobile-engineering', color: '#0284c7', description: 'Flutter, React Native, iOS & Android apps.' },
     { name: 'Cloud & DevOps', slug: 'cloud-devops', color: '#059669', description: 'Docker, Kubernetes, AWS, CI/CD automation.' },
     { name: 'Digital Marketing', slug: 'digital-marketing', color: '#db2777', description: 'SEO, growth analytics, and conversion optimization.' },
   ]);
 
-  // 4. Khoi tao danh sach khoa hoc (Course) kem bai giang va cau hoi trac nghiem
+  // 4. Khoi tao danh sach khoa hoc (Course) voi diem rating khop tuyet doi voi collection Review
   const courses = await Course.insertMany([
     {
       title: 'Modern React 19 & Design Systems Architecture',
@@ -173,7 +230,8 @@ export async function ensureSeeded() {
         name: 'Nguyen Tuan Huy',
         avatar: '/media/avatar/01.jpg',
       },
-      rating: { average: 4.9, count: 2 },
+      // Khop voi 2 danh gia 5 sao cua khoaUser va haUser
+      rating: { average: 5.0, count: 2 },
       curriculum: [
         {
           section: 'Module 1: Foundation & Token Architecture',
@@ -291,7 +349,8 @@ export async function ensureSeeded() {
         name: 'Nguyen Tuan Huy',
         avatar: '/media/avatar/01.jpg',
       },
-      rating: { average: 4.8, count: 1 },
+      // Khop voi 1 danh gia 5 sao cua huyStudentUser
+      rating: { average: 5.0, count: 1 },
       curriculum: [
         {
           section: 'Module 1: Figma Variables & Auto-Layout',
@@ -324,7 +383,8 @@ export async function ensureSeeded() {
       status: 'Live',
       objectives: ['Clean and analyze complex datasets', 'Build and deploy FastAPI data services'],
       instructor: { ref: tuUser._id, name: 'Dr. Hoang Anh Tu', avatar: '/media/avatar/06.jpg' },
-      rating: { average: 4.9, count: 1 },
+      // Khop voi 1 danh gia 5 sao cua khoaUser
+      rating: { average: 5.0, count: 1 },
       curriculum: [
         {
           section: 'Module 1: Data Pipelines',
@@ -356,7 +416,8 @@ export async function ensureSeeded() {
       status: 'Live',
       objectives: ['Design type-safe GraphQL schemas', 'Optimize MongoDB indexes and Redis caching'],
       instructor: { ref: huyEducatorUser._id, name: 'Nguyen Tuan Huy', avatar: '/media/avatar/01.jpg' },
-      rating: { average: 4.7, count: 0 },
+      // Chua co danh gia nen mac dinh average = 0, count = 0
+      rating: { average: 0, count: 0 },
       curriculum: [
         {
           section: 'Module 1: Schema Architecture',
@@ -388,7 +449,7 @@ export async function ensureSeeded() {
       status: 'Live',
       objectives: ['Write lean Dockerfiles', 'Deploy zero-downtime Kubernetes workloads'],
       instructor: { ref: datUser._id, name: 'Vo Quoc Dat', avatar: '/media/avatar/07.jpg' },
-      rating: { average: 4.8, count: 0 },
+      rating: { average: 0, count: 0 },
       curriculum: [
         {
           section: 'Module 1: Containers',
@@ -420,7 +481,7 @@ export async function ensureSeeded() {
       status: 'Live',
       objectives: ['Build acquisition funnels', 'Measure CAC and LTV'],
       instructor: { ref: linhUser._id, name: 'Dang Ngoc Linh', avatar: '/media/avatar/08.jpg' },
-      rating: { average: 4.6, count: 0 },
+      rating: { average: 0, count: 0 },
       curriculum: [
         {
           section: 'Module 1: Funnel Metrics',
@@ -449,7 +510,7 @@ export async function ensureSeeded() {
       status: 'Pending',
       objectives: ['Structure Flutter apps with Riverpod'],
       instructor: { ref: huyEducatorUser._id, name: 'Nguyen Tuan Huy', avatar: '/media/avatar/01.jpg' },
-      rating: { average: 5.0, count: 0 },
+      rating: { average: 0, count: 0 },
       curriculum: [
         {
           section: 'Module 1: Widget Composition',
@@ -474,7 +535,7 @@ export async function ensureSeeded() {
         { name: 'Node.js & MongoDB', level: 92 },
         { name: 'UI/UX Systems', level: 90 },
       ],
-      myCourses: [{ course: courses[0]._id }, { course: courses[1]._id }, { course: courses[3]._id }, { course: courses[6]._id }],
+      myCourses: [courses[0]._id, courses[1]._id, courses[3]._id, courses[6]._id],
       myStudents: [huyStudentUser._id, khoaUser._id, haUser._id],
     },
     {
@@ -483,7 +544,7 @@ export async function ensureSeeded() {
       occupation: 'Data Systems Architect',
       introduction: 'Applied Python data engineering and distributed systems.',
       isApproved: true,
-      myCourses: [{ course: courses[2]._id }],
+      myCourses: [courses[2]._id],
       myStudents: [khoaUser._id],
     },
     {
@@ -492,7 +553,7 @@ export async function ensureSeeded() {
       occupation: 'Staff Site Reliability Engineer',
       introduction: 'Kubernetes, cloud infrastructure, and CI/CD.',
       isApproved: true,
-      myCourses: [{ course: courses[4]._id }],
+      myCourses: [courses[4]._id],
       myStudents: [haUser._id],
     },
     {
@@ -501,109 +562,129 @@ export async function ensureSeeded() {
       occupation: 'Head of Growth',
       introduction: 'Product-led growth and marketing analytics.',
       isApproved: true,
-      myCourses: [{ course: courses[5]._id }],
+      myCourses: [courses[5]._id],
       myStudents: [],
     },
-    // Yeu cau dang ky tro thanh giang vien dang cho Admin duyet
+    // Yeu cau dang ky tro thanh giang vien dang cho Admin duyet (su dung dau gach ngang ASCII)
     {
       user: applicant1._id,
       address: 'Ho Chi Minh City, Vietnam',
       occupation: 'Senior Rust & Systems Engineer (7 years)',
-      introduction: 'Portfolio: github.com/phuc-rust — Applying to teach Systems Programming.',
+      introduction: 'Portfolio: github.com/phuc-rust - Applying to teach Systems Programming.',
       isApproved: false,
     },
     {
       user: applicant2._id,
       address: 'Ho Chi Minh City, Vietnam',
       occupation: 'Motion Designer @ Studio X (5 years)',
-      introduction: 'Portfolio: dribbble.com/thaovy — Applying to teach Motion & Interactive Prototyping.',
+      introduction: 'Portfolio: dribbble.com/thaovy - Applying to teach Motion & Interactive Prototyping.',
       isApproved: false,
     },
   ]);
 
-  // 6. Khoi tao ho so Hoc vien (Student)
+  // 6. Khoi tao ho so Hoc vien (Student) dong bo 100% voi Order va CourseProgress
   await Student.insertMany([
     {
       user: huyStudentUser._id,
       address: 'Thu Duc City, HCMC',
       myCourses: [{ course: courses[0]._id }, { course: courses[1]._id }],
-      stats: { totalCourses: 2, completedCourses: 0, totalLessons: 9, completedLessons: 2 },
+      // Tong bai hoc: 6 + 3 = 9; hoan thanh: 2 + 1 = 3
+      stats: { totalCourses: 2, completedCourses: 0, totalLessons: 9, completedLessons: 3 },
     },
     {
       user: khoaUser._id,
       address: 'District 1, HCMC',
-      myCourses: [{ course: courses[0]._id }, { course: courses[2]._id }],
-      stats: { totalCourses: 2, completedCourses: 1, totalLessons: 8, completedLessons: 5 },
+      // Bo sung courses[3] cho khop voi Order #4 (tong 3 khoa: 6 + 2 + 2 = 10 bai)
+      myCourses: [{ course: courses[0]._id }, { course: courses[2]._id }, { course: courses[3]._id }],
+      // Hoan thanh: 3 (courses[0]) + 2 (courses[2] - xong 1 khoa) + 0 (courses[3]) = 5 bai
+      stats: { totalCourses: 3, completedCourses: 1, totalLessons: 10, completedLessons: 5 },
     },
     {
       user: haUser._id,
       address: 'District 7, HCMC',
       myCourses: [{ course: courses[0]._id }, { course: courses[4]._id }],
+      // Tong bai hoc: 6 + 2 = 8; hoan thanh: 2 (courses[0]) + 1 (courses[4]) = 3 bai
       stats: { totalCourses: 2, completedCourses: 0, totalLessons: 8, completedLessons: 3 },
     },
   ]);
 
-  // 7. Khoi tao Tien do hoc tap (CourseProgress) va Chuoi ngay hoc (LearningStreak)
+  // 7. Khoi tao Tien do hoc tap (CourseProgress) day du cho ca 3 hoc vien va LearningStreak
   const c0Lectures = courses[0].curriculum.flatMap((m) => m.lectures);
-  await CourseProgress.create({
-    userId: huyStudentUser._id,
-    courseId: courses[0]._id,
-    completedLecturesCount: 2,
-    totalLectures: c0Lectures.length,
-    totalTimeSpentSec: 1140,
-    lastLectureId: c0Lectures[2]._id,
-    lastPositionSec: 120,
-    lectures: c0Lectures.map((l, i) => ({
-      lectureId: l._id,
-      status: i < 2 ? 'Completed' : i === 2 ? 'In_Progress' : 'Not_Started',
-      durationSec: l.duration,
-      lastPositionSec: i === 2 ? 120 : 0,
-      completedAt: i < 2 ? new Date() : undefined,
-    })),
-  });
-
   const c1Lectures = courses[1].curriculum.flatMap((m) => m.lectures);
-  await CourseProgress.create({
-    userId: huyStudentUser._id,
-    courseId: courses[1]._id,
-    completedLecturesCount: 1,
-    totalLectures: c1Lectures.length,
-    totalTimeSpentSec: 540,
-    lastLectureId: c1Lectures[0]._id,
-    lectures: c1Lectures.map((l, i) => ({
-      lectureId: l._id,
-      status: i === 0 ? 'Completed' : 'Not_Started',
-      durationSec: l.duration,
-      completedAt: i === 0 ? new Date() : undefined,
-    })),
+  const c2Lectures = courses[2].curriculum.flatMap((m) => m.lectures);
+  const c3Lectures = courses[3].curriculum.flatMap((m) => m.lectures);
+  const c4Lectures = courses[4].curriculum.flatMap((m) => m.lectures);
+
+  await CourseProgress.insertMany([
+    // Tien do cua huyStudentUser (2 + 1 = 3 bai hoan thanh)
+    {
+      userId: huyStudentUser._id,
+      courseId: courses[0]._id,
+      ...buildLectureProgress(c0Lectures, 2, 2, 120),
+    },
+    {
+      userId: huyStudentUser._id,
+      courseId: courses[1]._id,
+      ...buildLectureProgress(c1Lectures, 1),
+    },
+    // Tien do cua khoaUser (3 + 2 + 0 = 5 bai hoan thanh, hoan thanh 1 khoa courses[2])
+    {
+      userId: khoaUser._id,
+      courseId: courses[0]._id,
+      ...buildLectureProgress(c0Lectures, 3, 3, 90),
+    },
+    {
+      userId: khoaUser._id,
+      courseId: courses[2]._id,
+      ...buildLectureProgress(c2Lectures, 2),
+    },
+    {
+      userId: khoaUser._id,
+      courseId: courses[3]._id,
+      ...buildLectureProgress(c3Lectures, 0, 0, 60),
+    },
+    // Tien do cua haUser (2 + 1 = 3 bai hoan thanh)
+    {
+      userId: haUser._id,
+      courseId: courses[0]._id,
+      ...buildLectureProgress(c0Lectures, 2, 2, 150),
+    },
+    {
+      userId: haUser._id,
+      courseId: courses[4]._id,
+      ...buildLectureProgress(c4Lectures, 1),
+    },
+  ]);
+
+  // Tao du 12 ngay lien tiep dinh dang YYYY-MM-DD khop voi currentStreak = 12
+  const activeDates = Array.from({ length: 12 }, (_, idx) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (11 - idx));
+    return d.toISOString().slice(0, 10);
   });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
   await LearningStreak.create({
     userId: huyStudentUser._id,
     currentStreak: 12,
     longestStreak: 15,
-    lastActiveDate: todayStr,
-    activeDates: [todayStr],
+    lastActiveDate: activeDates[activeDates.length - 1],
+    activeDates,
   });
 
-  // 8. Khoi tao Danh sach yeu thich (Wishlist) va Gio hang (Cart)
+  // 8. Khoi tao Danh sach yeu thich (chi luu tai collection Wishlist) va Gio hang (Cart)
   await Wishlist.insertMany([
     { userId: huyStudentUser._id, courseId: courses[2]._id },
     { userId: huyStudentUser._id, courseId: courses[3]._id },
     { userId: huyStudentUser._id, courseId: courses[4]._id },
   ]);
-  await User.findByIdAndUpdate(huyStudentUser._id, {
-    wishlist: [courses[2]._id, courses[3]._id, courses[4]._id],
-  });
 
   await Cart.create({
     user: huyStudentUser._id,
     courses: [{ course: courses[2]._id }, { course: courses[5]._id }],
   });
 
-  // 9. Khoi tao Ma giam gia (Coupon)
-  await Coupon.insertMany([
+  // 9. Khoi tao Ma giam gia (Coupon) truoc Order de lien ket chinh xac
+  const coupons = await Coupon.insertMany([
     {
       code: 'COURSEHUB20',
       description: 'CourseHub Launch 20% Off',
@@ -611,6 +692,7 @@ export async function ensureSeeded() {
       startDate: new Date('2026-01-01'),
       expiryDate: new Date('2027-12-31'),
       isActive: true,
+      usersUsed: [khoaUser._id],
     },
     {
       code: 'WELCOME25',
@@ -619,6 +701,7 @@ export async function ensureSeeded() {
       startDate: new Date('2026-01-01'),
       expiryDate: new Date('2027-06-30'),
       isActive: true,
+      usersUsed: [],
     },
     {
       code: 'EDUCATOR15',
@@ -627,6 +710,7 @@ export async function ensureSeeded() {
       startDate: new Date('2026-01-01'),
       expiryDate: new Date('2027-03-31'),
       isActive: true,
+      usersUsed: [],
     },
     {
       code: 'FLASH30',
@@ -635,10 +719,11 @@ export async function ensureSeeded() {
       startDate: new Date('2026-01-01'),
       expiryDate: new Date('2026-12-31'),
       isActive: false,
+      usersUsed: [],
     },
   ]);
 
-  // 10. Khoi tao Don hang (Order) phan bo theo cac thang de hien thi bieu do doanh thu
+  // 10. Khoi tao Don hang (Order) co snapshot coupon va dong bo tong tien
   const monthsAgo = (m) => {
     const d = new Date();
     d.setMonth(d.getMonth() - m);
@@ -648,6 +733,7 @@ export async function ensureSeeded() {
     {
       user: huyStudentUser._id,
       courses: [{ course: courses[0]._id, pricePaid: 79 }, { course: courses[1]._id, pricePaid: 59 }],
+      coupon: { couponId: null, code: '', discountPercent: 0 },
       subTotal: 138,
       discountAmount: 0,
       totalAmount: 138,
@@ -658,9 +744,15 @@ export async function ensureSeeded() {
     {
       user: khoaUser._id,
       courses: [{ course: courses[0]._id, pricePaid: 79 }, { course: courses[2]._id, pricePaid: 89 }],
+      // Ap dung ma COURSEHUB20 giam 20% tren 168 => giam 34, tong thanh toan 134
+      coupon: {
+        couponId: coupons[0]._id,
+        code: coupons[0].code,
+        discountPercent: coupons[0].discountPercent,
+      },
       subTotal: 168,
-      discountAmount: 20,
-      totalAmount: 148,
+      discountAmount: 34,
+      totalAmount: 134,
       paymentMethod: 'momo',
       status: 'completed',
       createdAt: monthsAgo(1),
@@ -668,6 +760,7 @@ export async function ensureSeeded() {
     {
       user: haUser._id,
       courses: [{ course: courses[0]._id, pricePaid: 79 }, { course: courses[4]._id, pricePaid: 84 }],
+      coupon: { couponId: null, code: '', discountPercent: 0 },
       subTotal: 163,
       discountAmount: 0,
       totalAmount: 163,
@@ -678,6 +771,7 @@ export async function ensureSeeded() {
     {
       user: khoaUser._id,
       courses: [{ course: courses[3]._id, pricePaid: 95 }],
+      coupon: { couponId: null, code: '', discountPercent: 0 },
       subTotal: 95,
       discountAmount: 0,
       totalAmount: 95,
@@ -687,7 +781,7 @@ export async function ensureSeeded() {
     },
   ]);
 
-  // 11. Khoi tao Danh gia khoa hoc (Review)
+  // 11. Khoi tao Danh gia khoa hoc (Review) khop voi rating tren collection Course
   await Review.insertMany([
     {
       user: khoaUser._id,
@@ -700,6 +794,12 @@ export async function ensureSeeded() {
       course: courses[0]._id,
       rating: 5,
       description: 'Very practical explanations and zero fluff. Used the layout and MongoDB patterns directly in my capstone project.',
+    },
+    {
+      user: huyStudentUser._id,
+      course: courses[1]._id,
+      rating: 5,
+      description: 'Figma variables and auto-layout patterns are explained step by step with clean real-world examples.',
     },
     {
       user: khoaUser._id,
@@ -719,11 +819,18 @@ export async function ensureSeeded() {
   console.log('Hoan tat khoi tao du lieu mau CourseHub.');
 }
 
-// Cho phep chay truc tiep qua lenh: npm run seed
+// Cho phep chay truc tiep qua lenh: npm run seed va dong ket noi DB an toan
 if (process.argv[1]?.endsWith('seedData.js')) {
   import('dotenv/config').then(async () => {
-    await connectDB();
-    await ensureSeeded();
-    process.exit(0);
+    try {
+      await connectDB();
+      await ensureSeeded();
+      await mongoose.disconnect();
+      process.exit(0);
+    } catch (err) {
+      console.error('Seed data failed:', err);
+      await mongoose.disconnect().catch(() => {});
+      process.exit(1);
+    }
   });
 }
