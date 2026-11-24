@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { connectDB, disconnectDB } from './config/db.js';
+import authRoutes from './routes/authRoutes.js';
 
 // Khoi tao ung dung Express
 const app = express();
@@ -38,6 +39,9 @@ app.get('/api/health', (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Dang ky cac tuyen API xac thuc nguoi dung
+app.use('/api/auth', authRoutes);
 
 // Middleware bat loi 404 cho cac duong dan khong ton tai
 app.use((req, res) => {
