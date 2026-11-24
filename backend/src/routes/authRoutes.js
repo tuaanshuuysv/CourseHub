@@ -72,4 +72,38 @@ router.post('/register', async (req, res, next) => {
   }
 });
 
+// UC-1.1 Xac thuc ma OTP sau khi dang ky tai khoan
+router.post('/verify-otp', async (req, res, next) => {
+  try {
+    const { email, otp } = req.body || {};
+    const normalizedEmail = typeof email === 'string' ? email.toLowerCase().trim() : '';
+    const normalizedOtp = otp !== undefined && otp !== null ? String(otp).trim() : '';
+
+    if (!normalizedEmail || !normalizedOtp) {
+      return res.status(400).json({ message: 'Email and OTP are required' });
+    }
+
+    // Chu dong select them truong OTP vi schema dang dat select: false
+    const user = await User.findOne({ email: normalizedEmail }).select('+verifyOtp +verifyOtpExpireAt');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    if (!user.verifyOtp || user.verifyOtp !== normalizedOtp) {
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+    if (!user.verifyOtpExpireAt || user.verifyOtpExpireAt.getTime() < Date.now()) {
+      return res.status(400).json({ message: 'OTP has expired' });
+    }
+
+    user.isVerified = true;
+    user.verifyOtp = '';
+    user.verifyOtpExpireAt = null;
+    await user.save();
+
+    return res.json({ message: 'Account verified successfully' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
