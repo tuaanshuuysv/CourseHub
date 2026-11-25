@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import Admin from '../models/Admin.js';
@@ -175,6 +176,67 @@ router.post('/login', async (req, res, next) => {
         pfpImg: user.pfpImg,
         bio: user.bio,
         phonenumber: user.phonenumber,
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-1.2 Dang nhap nhanh bang tai khoan Google (OAuth demo flow)
+router.post('/google', async (req, res, next) => {
+  try {
+    const rawEmail = req.body?.email || 'user@demo.com';
+    const normalizedEmail = typeof rawEmail === 'string' ? rawEmail.toLowerCase().trim() : '';
+    const normalizedName =
+      typeof req.body?.name === 'string' && req.body.name.trim() ? req.body.name.trim() : 'Nguyen Tuan Huy';
+    const incomingGoogleId =
+      typeof req.body?.googleId === 'string' && req.body.googleId.trim() ? req.body.googleId.trim() : '';
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+
+    let user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      const randomPasswordHash = await bcrypt.hash(`google_oauth_${crypto.randomUUID()}`, 10);
+      user = await User.create({
+        name: normalizedName,
+        email: normalizedEmail,
+        password: randomPasswordHash,
+        role: 'student',
+        isVerified: true,
+        isActivated: true,
+        googleId: incomingGoogleId || `google_${crypto.randomUUID()}`,
+      });
+
+      // Khoi tao ho so hoc vien, gio hang va chuoi ngay hoc cho tai khoan Google moi
+      await Promise.all([
+        Student.create({ user: user._id }),
+        Cart.create({ user: user._id, courses: [] }),
+        LearningStreak.create({ userId: user._id, currentStreak: 0, longestStreak: 0 }),
+      ]);
+    } else {
+      if (!user.isActivated) {
+        return res.status(403).json({ message: 'Account is currently blocked by Administrator' });
+      }
+      if (!user.isVerified) {
+        user.isVerified = true;
+        await user.save();
+      }
+    }
+
+    const token = signToken({ id: user._id.toString(), role: user.role });
+    setAuthCookie(res, token);
+    return res.json({
+      message: 'Google Sign-In successful',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        pfpImg: user.pfpImg,
       },
     });
   } catch (err) {
