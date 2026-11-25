@@ -4,6 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { connectDB, disconnectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
+import publicRoutes from './routes/publicRoutes.js';
 
 // Khoi tao ung dung Express
 const app = express();
@@ -40,8 +41,9 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// Dang ky cac tuyen API xac thuc nguoi dung
+// Dang ky cac tuyen API xac thuc nguoi dung va danh muc cong khai
 app.use('/api/auth', authRoutes);
+app.use('/api', publicRoutes);
 
 // Middleware bat loi 404 cho cac duong dan khong ton tai
 app.use((req, res) => {
