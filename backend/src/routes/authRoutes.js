@@ -6,7 +6,7 @@ import User from '../models/User.js';
 import Student from '../models/Student.js';
 import Cart from '../models/Cart.js';
 import LearningStreak from '../models/LearningStreak.js';
-import { setAuthCookie, signToken } from '../middleware/auth.js';
+import { clearAuthCookie, setAuthCookie, signToken } from '../middleware/auth.js';
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -312,6 +312,12 @@ router.post('/reset-password', async (req, res, next) => {
   } catch (err) {
     return next(err);
   }
+});
+
+// UC-2.3 / UC-5.1 Dang xuat he thong va xoa cookie xac thuc HttpOnly
+router.post('/logout', (_req, res) => {
+  clearAuthCookie(res);
+  return res.json({ message: 'Signed out successfully' });
 });
 
 export default router;
