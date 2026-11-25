@@ -4,9 +4,10 @@ import bcrypt from 'bcryptjs';
 import Admin from '../models/Admin.js';
 import User from '../models/User.js';
 import Student from '../models/Student.js';
+import Instructor from '../models/Instructor.js';
 import Cart from '../models/Cart.js';
 import LearningStreak from '../models/LearningStreak.js';
-import { clearAuthCookie, setAuthCookie, signToken } from '../middleware/auth.js';
+import { authenticate, clearAuthCookie, setAuthCookie, signToken } from '../middleware/auth.js';
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -318,6 +319,50 @@ router.post('/reset-password', async (req, res, next) => {
 router.post('/logout', (_req, res) => {
   clearAuthCookie(res);
   return res.json({ message: 'Signed out successfully' });
+});
+
+// Lay thong tin phien dang nhap hien tai, chuoi ngay hoc va trang thai giang vien
+router.get('/me', authenticate, async (req, res, next) => {
+  try {
+    const { role, account, id } = req.auth;
+
+    if (role === 'admin') {
+      return res.json({
+        user: {
+          id,
+          name: account.name,
+          email: account.email,
+          role: 'admin',
+          pfpImg: '/media/avatar/02.jpg',
+        },
+      });
+    }
+
+    const [streak, instructor] = await Promise.all([
+      LearningStreak.findOne({ userId: id }),
+      Instructor.findOne({ user: id }),
+    ]);
+
+    return res.json({
+      user: {
+        id,
+        name: account.name,
+        email: account.email,
+        role: account.role,
+        pfpImg: account.pfpImg,
+        bio: account.bio,
+        phonenumber: account.phonenumber,
+        socials: account.socials,
+        website: account.website,
+      },
+      streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
+      instructorApplication: instructor
+        ? { isApproved: instructor.isApproved, occupation: instructor.occupation }
+        : null,
+    });
+  } catch (err) {
+    return next(err);
+  }
 });
 
 export default router;
