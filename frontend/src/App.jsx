@@ -1,18 +1,29 @@
-import CourseHubBrand from '@/components/CourseHubBrand';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { FaCheckCircle } from 'react-icons/fa';
+import { CourseHubProvider, useCourseHub } from '@/context/CourseHubContext';
+import SignInPage from '@/pages/guest/SignInPage';
 
-// Khung khoi tao ban dau cua ung dung Frontend CourseHub
+// Thanh thong bao nhanh hien thi trang thai thao tac toan cuc
+function ToastBanner() {
+  const { toast } = useCourseHub();
+  if (!toast) return null;
+  return (
+    <div className="ch-toast">
+      <FaCheckCircle style={{ color: toast.tone === 'danger' ? '#f87171' : '#5eead4' }} />
+      <span>{toast.message}</span>
+    </div>
+  );
+}
+
+// Dinh tuyen goc cua ung dung Frontend CourseHub
 export default function App() {
   return (
-    <div className="ch-container" style={{ paddingTop: 48 }}>
-      <div className="ch-card ch-card--pad">
-        <CourseHubBrand to="/" />
-        <h1 style={{ fontSize: '1.8rem', marginTop: 16 }}>
-          CourseHub MERN Stack — Khung giao dien Frontend
-        </h1>
-        <p style={{ color: 'var(--ink-muted)', marginTop: 8 }}>
-          He thong Design Tokens va HTTP Client da san sang ket noi toi Express API.
-        </p>
-      </div>
-    </div>
+    <CourseHubProvider>
+      <Routes>
+        <Route path="/auth/sign-in" element={<SignInPage />} />
+        <Route path="*" element={<Navigate to="/auth/sign-in" replace />} />
+      </Routes>
+      <ToastBanner />
+    </CourseHubProvider>
   );
 }
