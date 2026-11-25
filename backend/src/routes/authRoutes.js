@@ -275,4 +275,43 @@ router.post('/forgot-password', async (req, res, next) => {
   }
 });
 
+// UC-1.2 Dat lai mat khau bang ma OTP va vo hieu hoa phien dang nhap cu
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { email, otp, newPassword } = req.body || {};
+    const normalizedEmail = typeof email === 'string' ? email.toLowerCase().trim() : '';
+    const normalizedOtp = otp !== undefined && otp !== null ? String(otp).trim() : '';
+
+    if (!normalizedEmail || !normalizedOtp || !newPassword) {
+      return res.status(400).json({ message: 'Email, OTP, and new password are required' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail }).select('+verifyOtp +verifyOtpExpireAt');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    if (
+      !user.verifyOtp ||
+      user.verifyOtp !== normalizedOtp ||
+      !user.verifyOtpExpireAt ||
+      user.verifyOtpExpireAt.getTime() < Date.now()
+    ) {
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
+    user.password = await bcrypt.hash(String(newPassword), 10);
+    user.verifyOtp = '';
+    user.verifyOtpExpireAt = null;
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    return res.json({ message: 'Password reset successfully' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
