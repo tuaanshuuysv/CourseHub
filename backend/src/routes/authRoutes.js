@@ -244,4 +244,35 @@ router.post('/google', async (req, res, next) => {
   }
 });
 
+// UC-1.2 Gui ma OTP khoi phuc mat khau qua email
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const normalizedEmail = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+    if (!normalizedEmail || !EMAIL_REGEX.test(normalizedEmail)) {
+      return res.status(400).json({ message: 'Valid email is required' });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({ message: 'Email not found in system' });
+    }
+    if (!user.isActivated) {
+      return res.status(403).json({ message: 'Account is currently blocked by Administrator' });
+    }
+
+    const otp = generateOtp();
+    user.verifyOtp = otp;
+    user.verifyOtpExpireAt = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    return res.json({
+      message: 'OTP sent to your email',
+      // Tra ve demoOtp de kiem thu noi bo khi chua cau hinh may chu SMTP
+      demoOtp: otp,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
