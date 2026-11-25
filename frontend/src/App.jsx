@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { FaCheckCircle } from 'react-icons/fa';
 import { CourseHubProvider, useCourseHub } from '@/context/CourseHubContext';
 import SignInPage from '@/pages/guest/SignInPage';
+import SignUpPage from '@/pages/guest/SignUpPage';
 
 // Thanh thong bao nhanh hien thi trang thai thao tac toan cuc
 function ToastBanner() {
@@ -21,6 +22,7 @@ export default function App() {
     <CourseHubProvider>
       <Routes>
         <Route path="/auth/sign-in" element={<SignInPage />} />
+        <Route path="/auth/sign-up" element={<SignUpPage />} />
         <Route path="*" element={<Navigate to="/auth/sign-in" replace />} />
       </Routes>
       <ToastBanner />
