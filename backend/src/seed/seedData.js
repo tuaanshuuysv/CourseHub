@@ -89,10 +89,10 @@ export async function ensureSeeded() {
     isVerified: true,
   });
 
-  // 2. Khoi tao tai khoan Hoc vien demo va Giang vien demo (Nguyen Tuan Huy)
+  // 2. Khoi tao tai khoan Hoc vien va Giang vien khoi tao mac dinh
   const huyStudentUser = await User.create({
     name: 'Nguyen Tuan Huy',
-    email: 'user@demo.com',
+    email: 'student@coursehub.io',
     password: passwordHash,
     role: 'student',
     bio: 'Software engineering student exploring MERN stack architecture, React design systems, and cloud engineering.',
