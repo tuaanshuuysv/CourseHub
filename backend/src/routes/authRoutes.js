@@ -121,6 +121,43 @@ router.post('/verify-otp', async (req, res, next) => {
   }
 });
 
+// UC-1.1 Gui lai ma OTP xac thuc tai khoan (co gioi han chong spam 60 giay)
+router.post('/resend-otp', async (req, res, next) => {
+  try {
+    const normalizedEmail = typeof req.body?.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+    if (!normalizedEmail || !EMAIL_REGEX.test(normalizedEmail)) {
+      return res.status(400).json({ message: 'Valid email is required' });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail }).select('+verifyOtp +verifyOtpExpireAt');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    if (user.isVerified) {
+      return res.status(400).json({ message: 'Account is already verified' });
+    }
+    if (!user.isActivated) {
+      return res.status(403).json({ message: 'Account is currently blocked by Administrator' });
+    }
+
+    // Chan gui lai lien tuc trong vong 60 giay ke tu lan gui truoc (OTP co han 10 phut)
+    if (user.verifyOtpExpireAt && user.verifyOtpExpireAt.getTime() - Date.now() > 9 * 60 * 1000) {
+      return res.status(429).json({ message: 'Please wait 60 seconds before requesting a new OTP' });
+    }
+
+    const otp = generateOtp();
+    await sendOtpEmail({ to: user.email, name: user.name, otp, purpose: 'register' });
+
+    user.verifyOtp = otp;
+    user.verifyOtpExpireAt = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    return res.json({ message: 'A new OTP code has been sent to your email.' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // UC-1.2 Dang nhap he thong cho ca 3 vai tro (Hoc vien, Giang vien, Quan tri vien)
 router.post('/login', async (req, res, next) => {
   try {
