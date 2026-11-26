@@ -5,7 +5,7 @@ import AuthShell from '@/components/AuthShell';
 import { useCourseHub } from '@/context/CourseHubContext';
 import { api } from '@/api/client';
 
-// Man hinh dang ky tai khoan va xac thuc ma OTP qua email (UC-1.1)
+// Man hinh dang ky tai khoan va xac thuc ma OTP gui that qua email (UC-1.1)
 export default function SignUpPage() {
   const { notify } = useCourseHub();
   const navigate = useNavigate();
@@ -16,10 +16,11 @@ export default function SignUpPage() {
   const [agreed, setAgreed] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [otpModal, setOtpModal] = useState(null);
+  const [resending, setResending] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
   const [otpInput, setOtpInput] = useState('');
 
-  // Gui yeu cau dang ky tai khoan moi va nhan ma OTP xac thuc
+  // Gui yeu cau dang ky tai khoan moi va gui ma OTP ve email
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
@@ -31,8 +32,8 @@ export default function SignUpPage() {
     try {
       const res = await api.post('/api/auth/register', { name, email, password });
       notify(res.message);
-      setOtpModal({ email: res.email, demoOtp: res.demoOtp });
-      setOtpInput(res.demoOtp || '');
+      setPendingEmail(res.email);
+      setOtpInput('');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -40,20 +41,34 @@ export default function SignUpPage() {
     }
   };
 
-  // Gui ma OTP 6 chu so de kich hoat tai khoan vua dang ky
+  // Gui ma OTP 6 chu so nguoi dung nhan duoc tu hop thu email de kich hoat tai khoan
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const res = await api.post('/api/auth/verify-otp', { email: otpModal.email, otp: otpInput });
+      const res = await api.post('/api/auth/verify-otp', { email: pendingEmail, otp: otpInput });
       notify(res.message);
-      setOtpModal(null);
+      setPendingEmail('');
       navigate('/auth/sign-in');
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Gui lai ma OTP moi toi hop thu email (gioi han 60 giay/lan)
+  const handleResendOtp = async () => {
+    setError('');
+    setResending(true);
+    try {
+      const res = await api.post('/api/auth/resend-otp', { email: pendingEmail });
+      notify(res.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -65,23 +80,28 @@ export default function SignUpPage() {
         </div>
       )}
 
-      {otpModal ? (
+      {pendingEmail ? (
         <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
           <div style={{ background: 'var(--teal-soft)', padding: 14, borderRadius: 12, fontSize: '0.86rem' }}>
             <FaShieldAlt style={{ color: 'var(--teal)', marginRight: 6 }} />
-            OTP sent to <strong>{otpModal.email}</strong>
-            {otpModal.demoOtp && (
-              <div style={{ marginTop: 4 }}>
-                Demo OTP: <code>{otpModal.demoOtp}</code>
-              </div>
-            )}
+            A 6-digit OTP code has been sent to <strong>{pendingEmail}</strong>. Please check your inbox (or Spam folder).
           </div>
           <div className="ch-field">
             <label className="ch-label">6-Digit Verification OTP</label>
-            <input className="ch-input" value={otpInput} onChange={(e) => setOtpInput(e.target.value)} required />
+            <input
+              className="ch-input"
+              maxLength={6}
+              placeholder="Enter 6-digit OTP from email"
+              value={otpInput}
+              onChange={(e) => setOtpInput(e.target.value)}
+              required
+            />
           </div>
           <button type="submit" disabled={loading} className="ch-btn ch-btn--primary ch-btn--lg">
             {loading ? 'Verifying...' : 'Verify OTP & Activate'}
+          </button>
+          <button type="button" disabled={resending} onClick={handleResendOtp} className="ch-btn ch-btn--outline">
+            {resending ? 'Sending new OTP...' : 'Resend OTP to Email'}
           </button>
         </form>
       ) : (
@@ -103,7 +123,7 @@ export default function SignUpPage() {
                 style={{ paddingLeft: 38 }}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="student@coursehub.io"
+                placeholder="your_real_email@gmail.com"
                 required
               />
             </div>
