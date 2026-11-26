@@ -8,6 +8,7 @@ import Instructor from '../models/Instructor.js';
 import Cart from '../models/Cart.js';
 import LearningStreak from '../models/LearningStreak.js';
 import { authenticate, clearAuthCookie, setAuthCookie, signToken } from '../middleware/auth.js';
+import { sendOtpEmail } from '../services/emailService.js';
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -64,11 +65,22 @@ router.post('/register', async (req, res, next) => {
       LearningStreak.create({ userId: user._id, currentStreak: 0, longestStreak: 0 }),
     ]);
 
+    // Gui ma OTP xac thuc qua SMTP that; hoan tac tai khoan neu gui mail that bai
+    try {
+      await sendOtpEmail({ to: user.email, name: user.name, otp, purpose: 'register' });
+    } catch (mailErr) {
+      await Promise.all([
+        User.deleteOne({ _id: user._id }),
+        Student.deleteOne({ user: user._id }),
+        Cart.deleteOne({ user: user._id }),
+        LearningStreak.deleteOne({ userId: user._id }),
+      ]);
+      return next(mailErr);
+    }
+
     return res.status(201).json({
-      message: 'Registration successful. Please verify OTP sent to your email.',
+      message: 'Registration successful. Please check your email for the 6-digit OTP code.',
       email: user.email,
-      // Tra ve demoOtp de phuc vu kiem thu noi bo khi chua cau hinh SMTP
-      demoOtp: otp,
     });
   } catch (err) {
     return next(err);
@@ -262,14 +274,15 @@ router.post('/forgot-password', async (req, res, next) => {
     }
 
     const otp = generateOtp();
+    // Gui email truoc khi luu OTP vao CSDL de tranh ghi du lieu khi SMTP loi
+    await sendOtpEmail({ to: user.email, name: user.name, otp, purpose: 'reset-password' });
+
     user.verifyOtp = otp;
     user.verifyOtpExpireAt = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
     return res.json({
-      message: 'OTP sent to your email',
-      // Tra ve demoOtp de kiem thu noi bo khi chua cau hinh may chu SMTP
-      demoOtp: otp,
+      message: 'Password reset OTP has been sent to your email.',
     });
   } catch (err) {
     return next(err);
