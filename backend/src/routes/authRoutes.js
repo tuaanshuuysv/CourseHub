@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
 import Admin from '../models/Admin.js';
 import User from '../models/User.js';
 import Student from '../models/Student.js';
@@ -233,31 +234,70 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-// UC-1.2 Dang nhap nhanh bang tai khoan Google (OAuth demo flow)
+// UC-1.2 Dang nhap bang Google OAuth 2.0 (xac thuc chu ky ID Token tu Google)
 router.post('/google', async (req, res, next) => {
   try {
-    const rawEmail = req.body?.email || 'user@demo.com';
-    const normalizedEmail = typeof rawEmail === 'string' ? rawEmail.toLowerCase().trim() : '';
-    const normalizedName =
-      typeof req.body?.name === 'string' && req.body.name.trim() ? req.body.name.trim() : 'Nguyen Tuan Huy';
-    const incomingGoogleId =
-      typeof req.body?.googleId === 'string' && req.body.googleId.trim() ? req.body.googleId.trim() : '';
+    const idToken =
+      typeof req.body?.credential === 'string' && req.body.credential.trim()
+        ? req.body.credential.trim()
+        : typeof req.body?.idToken === 'string' && req.body.idToken.trim()
+          ? req.body.idToken.trim()
+          : '';
 
-    if (!EMAIL_REGEX.test(normalizedEmail)) {
-      return res.status(400).json({ message: 'Invalid email format' });
+    if (!idToken) {
+      return res.status(400).json({ message: 'Google ID token is required' });
     }
 
-    let user = await User.findOne({ email: normalizedEmail });
+    const googleClientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
+    if (!googleClientId || googleClientId === 'your_google_oauth_client_id.apps.googleusercontent.com') {
+      return res.status(503).json({
+        message: 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID in backend/.env',
+      });
+    }
+
+    // Xac thuc chu ky so va han su dung cua ID Token truc tiep voi Google OAuth2Client
+    let payload;
+    try {
+      const oauthClient = new OAuth2Client(googleClientId);
+      const ticket = await oauthClient.verifyIdToken({
+        idToken,
+        audience: googleClientId,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      return res.status(401).json({ message: 'Invalid or expired Google token' });
+    }
+
+    if (!payload?.sub || !payload?.email) {
+      return res.status(401).json({ message: 'Invalid Google token payload' });
+    }
+    if (!payload.email_verified) {
+      return res.status(403).json({ message: 'Google account email is not verified' });
+    }
+
+    const googleSub = String(payload.sub).trim();
+    const normalizedEmail = String(payload.email).toLowerCase().trim();
+    const displayName = (payload.name || normalizedEmail.split('@')[0]).trim();
+    const avatarUrl = typeof payload.picture === 'string' && payload.picture.trim() ? payload.picture.trim() : '';
+
+    // Khong cho phep dang nhap vao tai khoan Admin qua luong Google OAuth nguoi dung
+    const existingAdmin = await Admin.findOne({ email: normalizedEmail });
+    if (existingAdmin) {
+      return res.status(403).json({ message: 'Please use standard Admin sign-in credentials' });
+    }
+
+    let user = await User.findOne({ $or: [{ googleId: googleSub }, { email: normalizedEmail }] });
     if (!user) {
-      const randomPasswordHash = await bcrypt.hash(`google_oauth_${crypto.randomUUID()}`, 10);
+      const randomPasswordHash = await bcrypt.hash(`oauth_${crypto.randomUUID()}`, 10);
       user = await User.create({
-        name: normalizedName,
+        name: displayName,
         email: normalizedEmail,
         password: randomPasswordHash,
         role: 'student',
+        pfpImg: avatarUrl || '/media/avatar/09.jpg',
         isVerified: true,
         isActivated: true,
-        googleId: incomingGoogleId || `google_${crypto.randomUUID()}`,
+        googleId: googleSub,
       });
 
       // Khoi tao ho so hoc vien, gio hang va chuoi ngay hoc cho tai khoan Google moi
@@ -270,10 +310,20 @@ router.post('/google', async (req, res, next) => {
       if (!user.isActivated) {
         return res.status(403).json({ message: 'Account is currently blocked by Administrator' });
       }
+      let dirty = false;
+      if (!user.googleId) {
+        user.googleId = googleSub;
+        dirty = true;
+      }
       if (!user.isVerified) {
         user.isVerified = true;
-        await user.save();
+        dirty = true;
       }
+      if (avatarUrl && user.pfpImg === '/media/avatar/09.jpg') {
+        user.pfpImg = avatarUrl;
+        dirty = true;
+      }
+      if (dirty) await user.save();
     }
 
     const token = signToken({ id: user._id.toString(), role: user.role });
