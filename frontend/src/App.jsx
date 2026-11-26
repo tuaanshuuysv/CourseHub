@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { FaCheckCircle } from 'react-icons/fa';
 import { CourseHubProvider, useCourseHub } from '@/context/CourseHubContext';
+import HomePage from '@/pages/guest/HomePage';
 import SignInPage from '@/pages/guest/SignInPage';
 import SignUpPage from '@/pages/guest/SignUpPage';
 import ForgotPasswordPage from '@/pages/guest/ForgotPasswordPage';
@@ -22,10 +23,12 @@ export default function App() {
   return (
     <CourseHubProvider>
       <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/home" element={<HomePage />} />
         <Route path="/auth/sign-in" element={<SignInPage />} />
         <Route path="/auth/sign-up" element={<SignUpPage />} />
         <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="*" element={<Navigate to="/auth/sign-in" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ToastBanner />
     </CourseHubProvider>
