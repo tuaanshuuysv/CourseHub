@@ -9,7 +9,7 @@ import { api } from '@/api/client';
 export default function SignUpPage() {
   const { notify } = useCourseHub();
   const navigate = useNavigate();
-  const [name, setName] = useState('Nguyen Tuan Huy');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -110,7 +110,14 @@ export default function SignUpPage() {
             <label className="ch-label">Full Name</label>
             <div style={{ position: 'relative' }}>
               <FaUser style={{ position: 'absolute', left: 13, top: 13, color: 'var(--ink-muted)' }} />
-              <input className="ch-input" style={{ paddingLeft: 38 }} value={name} onChange={(e) => setName(e.target.value)} required />
+              <input
+                className="ch-input"
+                style={{ paddingLeft: 38 }}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your full name"
+                required
+              />
             </div>
           </div>
           <div className="ch-field">

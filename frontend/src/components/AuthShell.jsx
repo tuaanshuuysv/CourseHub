@@ -27,7 +27,7 @@ export default function AuthShell({ title, subtitle, children }) {
             </div>
           </div>
           <div style={{ fontSize: '0.82rem', color: '#71717a' }}>
-            Demo Identity: <strong style={{ color: '#e4e4e7' }}>Nguyen Tuan Huy</strong> (Student | Educator | Admin)
+            CourseHub Online Learning Platform | Built with MERN Stack
           </div>
         </div>
 
