@@ -10,13 +10,6 @@ export function useCourseHub() {
   return ctx;
 }
 
-// Tai khoan demo nhanh cho 3 vai tro phuc vu trinh dien do an
-const ROLE_CREDENTIALS = {
-  Student: { email: 'user@demo.com', password: '123456' },
-  Educator: { email: 'educator@coursehub.io', password: '123456' },
-  Admin: { email: 'admin@coursehub.io', password: '123456' },
-};
-
 const EMPTY_STREAK = { currentStreak: 0, longestStreak: 0, activeDates: [] };
 
 export function CourseHubProvider({ children }) {
@@ -62,7 +55,7 @@ export function CourseHubProvider({ children }) {
       setCategories(Array.isArray(catRes) ? catRes : []);
       setCourses(courseRes?.courses || []);
     } catch {
-      // Bo qua loi khi backend chua mount public routes o giai doan dau
+      // Bo qua loi khi mang gian doan trong luc khoi tao
     }
   }, []);
 
@@ -119,35 +112,21 @@ export function CourseHubProvider({ children }) {
       setStoredToken(res.token);
       setCurrentUser(res.user);
       await refreshStudentState(res.user.role);
-      notify(`Signed in as ${res.user.name} (${res.user.role})`);
+      notify(`Signed in as ${res.user.name}`);
       return res.user;
     },
     [notify, refreshStudentState]
   );
 
-  // Dang nhap nhanh bang tai khoan Google (OAuth demo)
-  const signInWithGoogle = useCallback(async () => {
-    const res = await api.post('/api/auth/google', { email: 'user@demo.com', name: 'Nguyen Tuan Huy' });
-    setStoredToken(res.token);
-    setCurrentUser(res.user);
-    await refreshStudentState(res.user.role);
-    notify('Signed in with Google');
-    return res.user;
-  }, [notify, refreshStudentState]);
-
-  // Chuyen doi nhanh giua 3 vai tro demo (Student, Educator, Admin)
-  const switchRole = useCallback(
-    async (roleLabel) => {
-      const creds = ROLE_CREDENTIALS[roleLabel] || ROLE_CREDENTIALS.Student;
-      try {
-        const res = await api.post('/api/auth/login', creds);
-        setStoredToken(res.token);
-        setCurrentUser(res.user);
-        await refreshStudentState(res.user.role);
-        notify(`Switched to ${res.user.name} (${roleLabel})`);
-      } catch (err) {
-        notify(err.message, 'danger');
-      }
+  // Dang nhap bang Google OAuth 2.0 (gui ID Token da ky tu Google len backend xac thuc)
+  const signInWithGoogle = useCallback(
+    async (credential) => {
+      const res = await api.post('/api/auth/google', { credential });
+      setStoredToken(res.token);
+      setCurrentUser(res.user);
+      await refreshStudentState(res.user.role);
+      notify(`Signed in with Google as ${res.user.name}`);
+      return res.user;
     },
     [notify, refreshStudentState]
   );
@@ -237,7 +216,6 @@ export function CourseHubProvider({ children }) {
       refreshStudentState,
       signIn,
       signInWithGoogle,
-      switchRole,
       signOut,
       toggleWishlist,
       addToCart,
@@ -258,7 +236,6 @@ export function CourseHubProvider({ children }) {
       refreshStudentState,
       signIn,
       signInWithGoogle,
-      switchRole,
       signOut,
       toggleWishlist,
       addToCart,

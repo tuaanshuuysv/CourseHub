@@ -104,7 +104,7 @@ export default function WorkspaceLayout({ variant = 'student', title, subtitle, 
   const avatar =
     currentUser?.pfpImg ||
     (variant === 'educator' ? '/media/avatar/01.jpg' : variant === 'admin' ? '/media/avatar/02.jpg' : '/media/avatar/09.jpg');
-  const displayName = currentUser?.name || 'Nguyen Tuan Huy';
+  const displayName = currentUser?.name || 'Account';
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>

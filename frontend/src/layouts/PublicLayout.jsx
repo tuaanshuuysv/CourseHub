@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { FaHeart, FaSearch, FaShoppingBag } from 'react-icons/fa';
+import { FaHeart, FaSearch, FaShoppingBag, FaSignOutAlt } from 'react-icons/fa';
 import CourseHubBrand from '@/components/CourseHubBrand';
 import { useCourseHub } from '@/context/CourseHubContext';
 
 // Khung giao dien cong khai gom thanh dieu huong dau trang, tim kiem va chan trang
 export default function PublicLayout({ children }) {
-  const { cartIds, wishlistIds, currentUser, switchRole } = useCourseHub();
+  const { cartIds, wishlistIds, currentUser, signOut } = useCourseHub();
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
@@ -16,14 +16,27 @@ export default function PublicLayout({ children }) {
     navigate(query.trim() ? `/courses?q=${encodeURIComponent(query.trim())}` : '/courses');
   };
 
-  // Xac dinh duong dan trang ca nhan tuong ung voi vai tro hien tai
+  // Xac dinh duong dan va nhan cua khong gian lam viec tuong ung voi vai tro dang dang nhap
+  const workspaceLink = !currentUser
+    ? null
+    : currentUser.role === 'admin'
+      ? { to: '/admin/dashboard', label: 'Admin Console' }
+      : currentUser.role === 'instructor'
+        ? { to: '/instructor/dashboard', label: 'Educator Studio' }
+        : { to: '/student/dashboard', label: 'My Learning' };
+
   const profileTarget = !currentUser
     ? '/auth/sign-up'
     : currentUser.role === 'admin'
-      ? '/admin/dashboard'
+      ? '/admin/settings'
       : currentUser.role === 'instructor'
         ? '/instructor/profile'
         : '/student/profile';
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -36,36 +49,7 @@ export default function PublicLayout({ children }) {
               Home
             </NavLink>
             <NavLink to="/courses">All Courses</NavLink>
-            <a
-              href="/student/dashboard"
-              onClick={async (e) => {
-                e.preventDefault();
-                await switchRole('Student');
-                navigate('/student/dashboard');
-              }}
-            >
-              Student
-            </a>
-            <a
-              href="/instructor/dashboard"
-              onClick={async (e) => {
-                e.preventDefault();
-                await switchRole('Educator');
-                navigate('/instructor/dashboard');
-              }}
-            >
-              Educator
-            </a>
-            <a
-              href="/admin/dashboard"
-              onClick={async (e) => {
-                e.preventDefault();
-                await switchRole('Admin');
-                navigate('/admin/dashboard');
-              }}
-            >
-              Admin
-            </a>
+            {workspaceLink && <NavLink to={workspaceLink.to}>{workspaceLink.label}</NavLink>}
           </nav>
 
           <form className="ch-pub-search" onSubmit={handleSearch}>
@@ -79,20 +63,43 @@ export default function PublicLayout({ children }) {
           </form>
 
           <div className="ch-pub-actions">
-            <Link to="/student/wishlist" className="ch-icon-btn" title="Wishlist">
-              <FaHeart size={15} />
-              {wishlistIds.length > 0 && <span className="ch-icon-btn__count">{wishlistIds.length}</span>}
-            </Link>
-            <Link to="/student/cart" className="ch-icon-btn" title="My Cart">
-              <FaShoppingBag size={15} />
-              {cartIds.length > 0 && <span className="ch-icon-btn__count">{cartIds.length}</span>}
-            </Link>
-            <Link to="/auth/sign-in" className="ch-btn ch-btn--sm ch-btn--outline">
-              Sign In
-            </Link>
-            <Link to={profileTarget} className="ch-btn ch-btn--sm ch-btn--primary">
-              {currentUser ? `${currentUser.name.split(' ').slice(-1)[0]} | ${currentUser.role}` : 'Sign Up'}
-            </Link>
+            {currentUser && currentUser.role !== 'admin' && (
+              <>
+                <Link to="/student/wishlist" className="ch-icon-btn" title="Wishlist">
+                  <FaHeart size={15} />
+                  {wishlistIds.length > 0 && <span className="ch-icon-btn__count">{wishlistIds.length}</span>}
+                </Link>
+                <Link to="/student/cart" className="ch-icon-btn" title="My Cart">
+                  <FaShoppingBag size={15} />
+                  {cartIds.length > 0 && <span className="ch-icon-btn__count">{cartIds.length}</span>}
+                </Link>
+              </>
+            )}
+
+            {currentUser ? (
+              <>
+                <Link to={profileTarget} className="ch-btn ch-btn--sm ch-btn--primary">
+                  {currentUser.name}
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="ch-btn ch-btn--sm ch-btn--outline"
+                  title="Sign Out"
+                >
+                  <FaSignOutAlt /> Sign Out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/auth/sign-in" className="ch-btn ch-btn--sm ch-btn--outline">
+                  Sign In
+                </Link>
+                <Link to="/auth/sign-up" className="ch-btn ch-btn--sm ch-btn--primary">
+                  Sign Up
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -105,7 +112,7 @@ export default function PublicLayout({ children }) {
             <div>
               <CourseHubBrand to="/" />
               <p style={{ color: 'var(--ink-muted)', fontSize: '0.9rem', marginTop: 12, maxWidth: 320 }}>
-                CourseHub MERN Stack Platform - MongoDB, Express.js, React, and Node.js.
+                CourseHub Online Learning Platform - Built with MongoDB, Express.js, React, and Node.js.
               </p>
               <p style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', fontWeight: 600 }}>
                 Nguyen Tuan Huy (22110334) | HCMUTE
@@ -116,7 +123,8 @@ export default function PublicLayout({ children }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.88rem', color: 'var(--ink-muted)' }}>
                 <Link to="/">Home Page</Link>
                 <Link to="/courses">All Courses</Link>
-                <Link to="/auth/sign-in">Sign In / OTP Sign Up</Link>
+                <Link to="/auth/sign-in">Sign In</Link>
+                <Link to="/auth/sign-up">Create Account</Link>
               </div>
             </div>
             <div>
@@ -133,7 +141,7 @@ export default function PublicLayout({ children }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.88rem', color: 'var(--ink-muted)' }}>
                 <span>hello@coursehub.io</span>
                 <span>Ho Chi Minh City, Vietnam</span>
-                <span>&copy; {new Date().getFullYear()} CourseHub MERN</span>
+                <span>&copy; {new Date().getFullYear()} CourseHub</span>
               </div>
             </div>
           </div>
