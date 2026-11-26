@@ -1,27 +1,92 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { FaArrowRight, FaEnvelope, FaGoogle, FaLock } from 'react-icons/fa';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { FaArrowRight, FaEnvelope, FaLock } from 'react-icons/fa';
 import AuthShell from '@/components/AuthShell';
 import { useCourseHub } from '@/context/CourseHubContext';
 
-// Man hinh dang nhap (UC-1.2) ket noi API /api/auth/login va /api/auth/google
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+const HAS_GOOGLE_OAUTH =
+  Boolean(GOOGLE_CLIENT_ID) &&
+  GOOGLE_CLIENT_ID !== 'your_google_oauth_client_id.apps.googleusercontent.com';
+
+// Man hinh dang nhap (UC-1.2) ho tro Email/Mat khau va Google OAuth 2.0 that
 export default function SignInPage() {
   const { signIn, signInWithGoogle, notify } = useCourseHub();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('user@demo.com');
-  const [password, setPassword] = useState('123456');
-  const [selectedRole, setSelectedRole] = useState('Student');
+  const location = useLocation();
+  const googleBtnRef = useRef(null);
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Chon nhanh thong tin tai khoan demo theo vai tro
-  const pickRole = (roleName) => {
-    setSelectedRole(roleName);
-    if (roleName === 'Student') setEmail('user@demo.com');
-    else if (roleName === 'Educator') setEmail('educator@coursehub.io');
-    else setEmail('admin@coursehub.io');
-    setPassword('123456');
+  const redirectAfterLogin = (user) => {
+    const fromPath = location.state?.from?.pathname;
+    if (fromPath && !fromPath.startsWith('/auth')) {
+      navigate(fromPath, { replace: true });
+      return;
+    }
+    if (user.role === 'instructor') navigate('/instructor/dashboard', { replace: true });
+    else if (user.role === 'admin') navigate('/admin/dashboard', { replace: true });
+    else navigate('/student/dashboard', { replace: true });
   };
+
+  // Tai va khoi tao Google Identity Services (GSI) khi da cau hinh VITE_GOOGLE_CLIENT_ID
+  useEffect(() => {
+    if (!HAS_GOOGLE_OAUTH || !googleBtnRef.current) return;
+    let cancelled = false;
+
+    const initGoogleButton = () => {
+      if (cancelled || !window.google?.accounts?.id || !googleBtnRef.current) return;
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          if (!response?.credential) return;
+          setError('');
+          setLoading(true);
+          try {
+            const user = await signInWithGoogle(response.credential);
+            redirectAfterLogin(user);
+          } catch (err) {
+            setError(err.message);
+            notify(err.message, 'danger');
+          } finally {
+            setLoading(false);
+          }
+        },
+      });
+      googleBtnRef.current.innerHTML = '';
+      window.google.accounts.id.renderButton(googleBtnRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: 380,
+        text: 'signin_with',
+        shape: 'pill',
+      });
+    };
+
+    if (window.google?.accounts?.id) {
+      initGoogleButton();
+    } else {
+      const existingScript = document.querySelector('script[data-gsi="true"]');
+      if (existingScript) {
+        existingScript.addEventListener('load', initGoogleButton);
+      } else {
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.dataset.gsi = 'true';
+        script.onload = initGoogleButton;
+        document.body.appendChild(script);
+      }
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [signInWithGoogle, notify]);
 
   // Xu ly gui form dang nhap bang email va mat khau
   const handleSubmit = async (e) => {
@@ -30,24 +95,7 @@ export default function SignInPage() {
     setLoading(true);
     try {
       const user = await signIn({ email, password });
-      if (user.role === 'instructor') navigate('/instructor/dashboard');
-      else if (user.role === 'admin') navigate('/admin/dashboard');
-      else navigate('/student/dashboard');
-    } catch (err) {
-      setError(err.message);
-      notify(err.message, 'danger');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Xu ly dang nhap nhanh bang Google OAuth demo
-  const handleGoogle = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      await signInWithGoogle();
-      navigate('/student/dashboard');
+      redirectAfterLogin(user);
     } catch (err) {
       setError(err.message);
       notify(err.message, 'danger');
@@ -57,25 +105,7 @@ export default function SignInPage() {
   };
 
   return (
-    <AuthShell title="Welcome back to CourseHub" subtitle="Sign in with MongoDB + JWT authentication.">
-      <div style={{ background: 'var(--teal-soft)', borderRadius: 14, padding: 14, marginBottom: 18 }}>
-        <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal-dark)', marginBottom: 8 }}>
-          QUICK DEMO ACCOUNT: NGUYEN TUAN HUY
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {['Student', 'Educator', 'Admin'].map((roleName) => (
-            <button
-              key={roleName}
-              type="button"
-              onClick={() => pickRole(roleName)}
-              className={`ch-btn ch-btn--sm ${selectedRole === roleName ? 'ch-btn--primary' : 'ch-btn--outline'}`}
-            >
-              {roleName}
-            </button>
-          ))}
-        </div>
-      </div>
-
+    <AuthShell title="Welcome back to CourseHub" subtitle="Sign in to access your courses and learning workspace.">
       {error && (
         <div className="ch-badge ch-badge--danger" style={{ width: '100%', padding: '10px 14px', borderRadius: 12, marginBottom: 14 }}>
           {error}
@@ -91,6 +121,7 @@ export default function SignInPage() {
               type="email"
               className="ch-input"
               style={{ paddingLeft: 38 }}
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -111,6 +142,7 @@ export default function SignInPage() {
               type="password"
               className="ch-input"
               style={{ paddingLeft: 38 }}
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -119,12 +151,19 @@ export default function SignInPage() {
         </div>
 
         <button type="submit" disabled={loading} className="ch-btn ch-btn--primary ch-btn--lg" style={{ marginTop: 4 }}>
-          {loading ? 'Signing in...' : `Sign In as ${selectedRole}`} <FaArrowRight />
+          {loading ? 'Signing in...' : 'Sign In'} <FaArrowRight />
         </button>
 
-        <button type="button" disabled={loading} onClick={handleGoogle} className="ch-btn ch-btn--outline">
-          <FaGoogle style={{ color: '#ea4335' }} /> Sign in with Google
-        </button>
+        {HAS_GOOGLE_OAUTH && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ink-muted)', fontSize: '0.8rem', margin: '4px 0' }}>
+              <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              <span>OR</span>
+              <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            </div>
+            <div ref={googleBtnRef} style={{ display: 'flex', justifyContent: 'center', minHeight: 42 }} />
+          </>
+        )}
       </form>
 
       <p style={{ textAlign: 'center', marginTop: 20, marginBottom: 0, fontSize: '0.88rem', color: 'var(--ink-muted)' }}>
