@@ -8,12 +8,15 @@ import User from '../models/User.js';
 import Student from '../models/Student.js';
 import Instructor from '../models/Instructor.js';
 import Course from '../models/Course.js';
+import CourseProgress from '../models/CourseProgress.js';
 import LearningStreak from '../models/LearningStreak.js';
 import Wishlist from '../models/Wishlist.js';
 import Cart from '../models/Cart.js';
 import Coupon from '../models/Coupon.js';
+import Order from '../models/Order.js';
 import { authenticate, requireRole, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
 import { AVATARS_DIR, uploadAvatar } from '../middleware/upload.js';
+import { isSmtpConfigured, sendOrderConfirmationEmail } from '../services/emailService.js';
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -389,6 +392,191 @@ router.post('/coupons/validate', async (req, res, next) => {
         discountPercent: coupon.discountPercent,
         expiryDate: coupon.expiryDate,
       },
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Tinh gia ban thuc te cua mot khoa hoc co ap dung giam gia (neu hop le)
+function getEffectivePrice(course) {
+  const hasDiscount =
+    Boolean(course.enableDiscount) &&
+    typeof course.discountPrice === 'number' &&
+    course.discountPrice < course.price;
+  return hasDiscount ? course.discountPrice : course.price;
+}
+
+// UC-3.4 Thanh toan, tao don hang, ghi danh khoa hoc va gui email hoa don xac nhan
+router.post('/checkout', async (req, res, next) => {
+  try {
+    const { courseIds, couponCode, paymentMethod = 'vnpay' } = req.body || {};
+    if (!['vnpay', 'momo', 'free'].includes(paymentMethod)) {
+      return res.status(400).json({ message: 'Invalid payment method' });
+    }
+
+    let candidateCourses = [];
+    if (Array.isArray(courseIds) && courseIds.length > 0) {
+      const validIds = courseIds.filter((id) => mongoose.isValidObjectId(id));
+      if (validIds.length !== courseIds.length) {
+        return res.status(400).json({ message: 'One or more courseIds are invalid' });
+      }
+      candidateCourses = await Course.find({
+        _id: { $in: validIds },
+        status: 'Live',
+        isDeleted: false,
+        isPrivate: false,
+      });
+    } else {
+      const cart = await Cart.findOne({ user: req.auth.id }).populate({
+        path: 'courses.course',
+        match: { status: 'Live', isDeleted: false, isPrivate: false },
+      });
+      candidateCourses = (cart?.courses || []).map((c) => c.course).filter(Boolean);
+    }
+
+    let student = await Student.findOne({ user: req.auth.id });
+    if (!student) {
+      student = await Student.create({ user: req.auth.id });
+    }
+    const enrolledSet = new Set((student.myCourses || []).map((m) => String(m.course)));
+
+    // Loai bo khoa hoc da mua hoac khoa hoc do chinh nguoi dung giang day
+    const selectedCourses = candidateCourses.filter(
+      (c) => !enrolledSet.has(String(c._id)) && String(c.instructor?.ref) !== String(req.auth.id)
+    );
+    if (selectedCourses.length === 0) {
+      return res.status(400).json({ message: 'No eligible courses selected for checkout' });
+    }
+
+    const subTotal = selectedCourses.reduce((sum, c) => sum + getEffectivePrice(c), 0);
+
+    let discountAmount = 0;
+    let couponSnapshot = { couponId: null, code: '', discountPercent: 0 };
+    let usedCouponDoc = null;
+
+    if (typeof couponCode === 'string' && couponCode.trim()) {
+      const normalizedCode = couponCode.trim().toUpperCase();
+      const cp = await Coupon.findOne({ code: normalizedCode, isActive: true });
+      if (!cp) {
+        return res.status(404).json({ message: 'Coupon is invalid or inactive' });
+      }
+      const now = new Date();
+      if (cp.startDate && cp.startDate > now) {
+        return res.status(400).json({ message: 'Coupon is not active yet' });
+      }
+      if (cp.expiryDate < now) {
+        return res.status(400).json({ message: 'Coupon has expired' });
+      }
+      if ((cp.usersUsed || []).some((uid) => String(uid) === String(req.auth.id))) {
+        return res.status(409).json({ message: 'You have already used this coupon' });
+      }
+      discountAmount = Math.min(subTotal, Math.round((subTotal * cp.discountPercent) / 100));
+      couponSnapshot = {
+        couponId: cp._id,
+        code: cp.code,
+        discountPercent: cp.discountPercent,
+      };
+      usedCouponDoc = cp;
+    }
+
+    const totalAmount = Math.max(0, subTotal - discountAmount);
+    const resolvedMethod = totalAmount === 0 ? 'free' : paymentMethod;
+
+    const orderItems = selectedCourses.map((c) => ({
+      course: c._id,
+      pricePaid: getEffectivePrice(c),
+    }));
+
+    const order = await Order.create({
+      user: req.auth.id,
+      courses: orderItems,
+      coupon: couponSnapshot,
+      subTotal,
+      discountAmount,
+      totalAmount,
+      paymentMethod: resolvedMethod,
+      status: 'completed',
+    });
+
+    if (usedCouponDoc) {
+      await Coupon.findByIdAndUpdate(usedCouponDoc._id, {
+        $addToSet: { usersUsed: req.auth.id },
+      });
+    }
+
+    // Ghi danh hoc vien, tang so luong hoc vien khoa hoc va khoi tao tien do hoc tap
+    let addedLessons = 0;
+    for (const c of selectedCourses) {
+      student.myCourses.push({ course: c._id, enrolledAt: new Date() });
+      const allLectures = (c.curriculum || []).flatMap((sec) => sec.lectures || []);
+      addedLessons += allLectures.length;
+
+      await Promise.all([
+        Course.findByIdAndUpdate(c._id, { $inc: { studentsEnrolled: 1 } }),
+        Instructor.findOneAndUpdate(
+          { user: c.instructor.ref },
+          { $addToSet: { myStudents: req.auth.id } }
+        ),
+        CourseProgress.findOneAndUpdate(
+          { userId: req.auth.id, courseId: c._id },
+          {
+            $setOnInsert: {
+              userId: req.auth.id,
+              courseId: c._id,
+              totalLectures: allLectures.length,
+              lectures: allLectures.map((l) => ({
+                lectureId: l._id,
+                status: 'Not_Started',
+                durationSec: l.duration || 600,
+              })),
+            },
+          },
+          { upsert: true, new: true }
+        ),
+      ]);
+    }
+
+    student.stats.totalCourses = student.myCourses.length;
+    student.stats.totalLessons = (student.stats.totalLessons || 0) + addedLessons;
+    await student.save();
+
+    // Go cac khoa hoc vua thanh toan khoi gio hang
+    await Cart.findOneAndUpdate(
+      { user: req.auth.id },
+      { $pull: { courses: { course: { $in: selectedCourses.map((c) => c._id) } } } }
+    );
+
+    // Gui email xac nhan thanh toan va hoa don toi dia chi email cua hoc vien
+    let emailSent = false;
+    if (isSmtpConfigured() && req.auth.account?.email) {
+      try {
+        await sendOrderConfirmationEmail({
+          to: req.auth.account.email,
+          name: req.auth.account.name,
+          orderId: order._id,
+          courses: selectedCourses.map((c) => ({
+            title: c.title,
+            pricePaid: getEffectivePrice(c),
+          })),
+          subTotal,
+          discountAmount,
+          totalAmount,
+          couponCode: couponSnapshot.code,
+          paymentMethod: resolvedMethod,
+        });
+        emailSent = true;
+      } catch (mailErr) {
+        console.error('Order confirmation email failed:', mailErr.message);
+      }
+    }
+
+    return res.status(201).json({
+      message: emailSent
+        ? 'Payment successful! Confirmation email sent and courses unlocked.'
+        : 'Payment successful & courses enrolled!',
+      order,
+      emailSent,
     });
   } catch (err) {
     return next(err);
