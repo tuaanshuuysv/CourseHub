@@ -471,4 +471,165 @@ router.post('/courses', async (req, res, next) => {
   }
 });
 
+// UC-4.8 Cap nhat khoa hoc so huu, giao trinh, cau hoi trac nghiem va chuyen DraftVideo moi gan
+router.put('/courses/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+
+    const course = await Course.findOne({
+      _id: req.params.id,
+      'instructor.ref': req.auth.id,
+      isDeleted: false,
+    });
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const {
+      title,
+      subtitle,
+      description,
+      categoryId,
+      categoryName,
+      subCategory,
+      tags,
+      level,
+      language,
+      price,
+      discountPrice,
+      enableDiscount,
+      duration,
+      durationUnit,
+      thumbnail,
+      image,
+      previewVideo,
+      status,
+      isPrivate,
+      objectives,
+      curriculum,
+    } = req.body || {};
+
+    // Chan giang vien tu nang khoa hoc len Live hoac tu mo khoa khoa bi Admin chan
+    if (status !== undefined) {
+      if (!VALID_COURSE_STATUSES.includes(status)) {
+        return res.status(400).json({ message: 'Invalid course status' });
+      }
+      if (status === 'Live' && course.status !== 'Live') {
+        return res.status(403).json({ message: 'Only admins can publish a course to Live status' });
+      }
+      if (course.status === 'Blocked' && status !== 'Blocked') {
+        return res.status(403).json({ message: 'Blocked courses can only be unblocked by an admin' });
+      }
+      if (['Rejected', 'Blocked'].includes(status) && status !== course.status) {
+        return res.status(403).json({ message: 'Instructors cannot assign moderation statuses' });
+      }
+      course.status = status;
+    }
+
+    if (title !== undefined) {
+      const cleanTitle = typeof title === 'string' ? title.trim() : '';
+      if (!cleanTitle) {
+        return res.status(400).json({ message: 'Course title cannot be empty' });
+      }
+      course.title = cleanTitle;
+    }
+
+    if (categoryId !== undefined || categoryName !== undefined) {
+      const cat = await resolveCategory({ categoryId, categoryName });
+      if (!cat) {
+        return res.status(400).json({ message: 'Valid category is required' });
+      }
+      course.category = cat._id;
+    }
+
+    if (level !== undefined) {
+      if (!VALID_LEVELS.includes(level)) {
+        return res.status(400).json({ message: 'Invalid course level' });
+      }
+      course.level = level;
+    }
+
+    if (durationUnit !== undefined) {
+      if (!VALID_DURATION_UNITS.includes(durationUnit)) {
+        return res.status(400).json({ message: 'Invalid durationUnit' });
+      }
+      course.durationUnit = durationUnit;
+    }
+
+    if (duration !== undefined) {
+      const parsedDuration = Number(duration);
+      if (!Number.isFinite(parsedDuration) || parsedDuration < 0) {
+        return res.status(400).json({ message: 'Duration must be a non-negative number' });
+      }
+      course.duration = parsedDuration;
+    }
+
+    const nextPrice = price !== undefined ? Number(price) : course.price;
+    const nextEnableDiscount = enableDiscount !== undefined ? Boolean(enableDiscount) : course.enableDiscount;
+    const nextDiscountPrice =
+      discountPrice !== undefined
+        ? Number(discountPrice)
+        : nextEnableDiscount
+          ? course.discountPrice
+          : nextPrice;
+
+    if (!Number.isFinite(nextPrice) || nextPrice < 0 || !Number.isFinite(nextDiscountPrice) || nextDiscountPrice < 0) {
+      return res.status(400).json({ message: 'Price and discountPrice must be non-negative numbers' });
+    }
+    if (nextEnableDiscount && nextDiscountPrice > nextPrice) {
+      return res.status(400).json({ message: 'discountPrice cannot exceed price' });
+    }
+    course.price = nextPrice;
+    course.enableDiscount = nextEnableDiscount;
+    course.discountPrice = nextEnableDiscount ? nextDiscountPrice : nextPrice;
+
+    if (subtitle !== undefined) course.subtitle = String(subtitle).trim();
+    if (description !== undefined) course.description = String(description).trim();
+    if (subCategory !== undefined) course.subCategory = String(subCategory).trim();
+    if (language !== undefined && String(language).trim()) course.language = String(language).trim();
+    if (isPrivate !== undefined) course.isPrivate = Boolean(isPrivate);
+
+    if (typeof thumbnail === 'string' && thumbnail.trim()) {
+      course.thumbnail = thumbnail.trim();
+      course.image = thumbnail.trim();
+    } else if (typeof image === 'string' && image.trim()) {
+      course.image = image.trim();
+      course.thumbnail = image.trim();
+    }
+
+    if (typeof previewVideo === 'string' && previewVideo.trim()) {
+      course.previewVideo = previewVideo.trim();
+    }
+
+    if (Array.isArray(objectives)) {
+      course.objectives = objectives.map((o) => String(o ?? '').trim()).filter(Boolean);
+    }
+    if (Array.isArray(tags)) {
+      course.tags = tags.map((t) => String(t ?? '').trim()).filter(Boolean);
+    }
+
+    if (curriculum !== undefined) {
+      const normalized = normalizeCurriculumAndValidate(curriculum);
+      if (normalized.error) {
+        return res.status(400).json({ message: normalized.error });
+      }
+      course.curriculum = normalized.curriculum;
+      course.lecturesCount = normalized.lecturesCount;
+    }
+
+    await course.save();
+    await promoteDraftVideos(course.previewVideo, course.curriculum);
+
+    const populated = await course.populate('category', 'name slug color');
+    return res.json({
+      message: 'Course updated successfully',
+      course: populated,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
