@@ -14,6 +14,7 @@ import MyCartPage from '@/pages/student/MyCartPage';
 import MyCoursesPage from '@/pages/student/MyCoursesPage';
 import LearningCoursePage from '@/pages/student/LearningCoursePage';
 import StudentProfilePage from '@/pages/student/StudentProfilePage';
+import EducatorDashboardPage from '@/pages/educator/EducatorDashboardPage';
 
 // Thanh thong bao nhanh hien thi trang thai thao tac toan cuc
 function ToastBanner() {
@@ -110,6 +111,16 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={['student', 'instructor']}>
               <StudentProfilePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Cac tuyen duong khong gian Giang vien (yeu cau dang nhap vai tro instructor) */}
+        <Route
+          path="/instructor/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={['instructor']}>
+              <EducatorDashboardPage />
             </ProtectedRoute>
           }
         />
