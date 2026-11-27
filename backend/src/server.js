@@ -6,6 +6,7 @@ import { connectDB, disconnectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
+import mediaRoutes from './routes/mediaRoutes.js';
 
 // Khoi tao ung dung Express
 const app = express();
@@ -42,10 +43,11 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// Dang ky cac tuyen API xac thuc nguoi dung, danh muc cong khai va hoc vien
+// Dang ky cac tuyen API xac thuc nguoi dung, danh muc cong khai, hoc vien va media
 app.use('/api/auth', authRoutes);
 app.use('/api', publicRoutes);
 app.use('/api/student', studentRoutes);
+app.use('/api/media', mediaRoutes);
 
 // Middleware bat loi 404 cho cac duong dan khong ton tai
 app.use((req, res) => {
@@ -55,6 +57,10 @@ app.use((req, res) => {
 // Middleware xu ly loi tap trung phan loai theo ma trang thai HTTP chuan
 app.use((err, _req, res, _next) => {
   console.error(err);
+
+  if (err.name === 'MulterError') {
+    return res.status(400).json({ message: err.message });
+  }
 
   if (err.name === 'ValidationError') {
     return res.status(400).json({ message: err.message });

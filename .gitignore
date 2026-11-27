@@ -15,6 +15,9 @@ build/
 # Local MongoDB storage
 mongodb-data/
 
+# Uploaded media files (avatars, thumbnails, videos)
+backend/uploads/
+
 # Logs & OS files
 *.log
 npm-debug.log*

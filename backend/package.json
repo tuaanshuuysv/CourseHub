@@ -18,6 +18,7 @@
     "google-auth-library": "^11.3.4",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
+    "multer": "^2.5.0",
     "nodemailer": "^10.6.1"
   }
 }
