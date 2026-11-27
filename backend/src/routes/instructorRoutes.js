@@ -4,10 +4,12 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Category from '../models/Category.js';
 import Course from '../models/Course.js';
+import CourseProgress from '../models/CourseProgress.js';
 import DraftVideo from '../models/DraftVideo.js';
 import Instructor from '../models/Instructor.js';
 import Order from '../models/Order.js';
 import Review from '../models/Review.js';
+import Student from '../models/Student.js';
 import User from '../models/User.js';
 import { authenticate, requireInstructor } from '../middleware/auth.js';
 import { VIDEOS_DIR, uploadThumbnail, uploadVideo } from '../middleware/upload.js';
@@ -654,6 +656,117 @@ router.delete('/courses/:id', async (req, res, next) => {
     );
 
     return res.json({ message: 'Course deleted successfully' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-4.1 -> UC-4.4 Lay danh sach hoc vien ghi danh khoa hoc so huu kem loc khoa (chan IDOR), tim kiem va sap xep
+router.get('/students', async (req, res, next) => {
+  try {
+    const q = typeof req.query?.q === 'string' ? req.query.q.trim().toLowerCase() : '';
+    const sort = typeof req.query?.sort === 'string' ? req.query.sort.trim() : 'newest';
+    const courseId = typeof req.query?.courseId === 'string' ? req.query.courseId.trim() : '';
+
+    const ownedCourses = await Course.find({
+      'instructor.ref': req.auth.id,
+      isDeleted: false,
+    }).select('_id title lecturesCount');
+    const ownedMap = Object.fromEntries(ownedCourses.map((c) => [String(c._id), c]));
+    const ownedIds = ownedCourses.map((c) => c._id);
+
+    let targetCourseIds = ownedIds;
+    if (courseId) {
+      if (!mongoose.isValidObjectId(courseId)) {
+        return res.status(400).json({ message: 'Invalid courseId' });
+      }
+      if (!ownedMap[courseId]) {
+        return res.status(403).json({ message: 'You do not own this course' });
+      }
+      targetCourseIds = [ownedMap[courseId]._id];
+    }
+
+    if (targetCourseIds.length === 0) {
+      return res.json([]);
+    }
+
+    const targetIdSet = new Set(targetCourseIds.map((id) => String(id)));
+    const [students, progresses] = await Promise.all([
+      Student.find({ 'myCourses.course': { $in: targetCourseIds } }).populate(
+        'user',
+        'name email pfpImg phonenumber isActivated createdAt'
+      ),
+      CourseProgress.find({ courseId: { $in: targetCourseIds } }),
+    ]);
+
+    const progByUserCourse = new Map();
+    for (const p of progresses) {
+      progByUserCourse.set(`${String(p.userId)}_${String(p.courseId)}`, p);
+    }
+
+    let rows = students
+      .filter((s) => Boolean(s.user))
+      .map((s) => {
+        const uid = String(s.user._id);
+        const matchedEnrollments = (s.myCourses || []).filter((m) => targetIdSet.has(String(m.course)));
+
+        const courseDetails = matchedEnrollments.map((m) => {
+          const cid = String(m.course);
+          const cDoc = ownedMap[cid];
+          const prog = progByUserCourse.get(`${uid}_${cid}`);
+          const totalLec = prog?.totalLectures || cDoc?.lecturesCount || 1;
+          const doneLec = prog?.completedLecturesCount || 0;
+          const percent = Math.min(100, Math.round((doneLec / totalLec) * 100));
+          return {
+            courseId: cid,
+            title: cDoc?.title || 'Course',
+            enrolledAt: m.enrolledAt || s.user.createdAt,
+            completedLectures: doneLec,
+            totalLectures: totalLec,
+            percent,
+          };
+        });
+
+        const avgProgress =
+          courseDetails.length > 0
+            ? Math.round(courseDetails.reduce((sum, item) => sum + item.percent, 0) / courseDetails.length)
+            : 0;
+
+        const latestEnrolledAt = courseDetails.reduce(
+          (latest, item) => (new Date(item.enrolledAt) > new Date(latest) ? item.enrolledAt : latest),
+          s.user.createdAt
+        );
+
+        return {
+          id: s.user._id,
+          name: s.user.name,
+          email: s.user.email,
+          avatar: s.user.pfpImg || '/media/avatar/09.jpg',
+          phonenumber: s.user.phonenumber || '',
+          address: s.address || '',
+          enrolledCount: courseDetails.length,
+          courses: courseDetails,
+          progress: avgProgress,
+          joinedAt: latestEnrolledAt,
+          status: s.user.isActivated ? 'Active' : 'Blocked',
+        };
+      });
+
+    if (q) {
+      rows = rows.filter(
+        (r) => r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q)
+      );
+    }
+
+    if (sort === 'name') {
+      rows.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sort === 'progress') {
+      rows.sort((a, b) => b.progress - a.progress);
+    } else {
+      rows.sort((a, b) => new Date(b.joinedAt) - new Date(a.joinedAt));
+    }
+
+    return res.json(rows);
   } catch (err) {
     return next(err);
   }
