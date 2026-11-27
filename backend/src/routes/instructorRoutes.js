@@ -891,4 +891,109 @@ router.get('/profile', async (req, res, next) => {
   }
 });
 
+// UC-2.2 Cap nhat ho so chuyen mon giang vien (hoc van <= 5, ky nang <= 6) va dong bo ten tren khoa hoc
+router.put('/profile', async (req, res, next) => {
+  try {
+    const {
+      name,
+      phonenumber,
+      website,
+      bio,
+      socials,
+      occupation,
+      introduction,
+      address,
+      education,
+      skills,
+    } = req.body || {};
+
+    const userUpdate = {};
+    if (typeof name === 'string' && name.trim()) userUpdate.name = name.trim();
+    if (phonenumber !== undefined) userUpdate.phonenumber = String(phonenumber).trim();
+    if (website !== undefined) userUpdate.website = String(website).trim();
+    if (bio !== undefined) userUpdate.bio = String(bio).trim();
+    if (socials && typeof socials === 'object') {
+      userUpdate.socials = {
+        facebook: typeof socials.facebook === 'string' ? socials.facebook.trim() : '',
+        youtube: typeof socials.youtube === 'string' ? socials.youtube.trim() : '',
+        linkedin: typeof socials.linkedin === 'string' ? socials.linkedin.trim() : '',
+        instagram: typeof socials.instagram === 'string' ? socials.instagram.trim() : '',
+      };
+    }
+
+    const instructorUpdate = {};
+    if (occupation !== undefined) instructorUpdate.occupation = String(occupation).trim();
+    if (introduction !== undefined) instructorUpdate.introduction = String(introduction).trim();
+    if (address !== undefined) instructorUpdate.address = String(address).trim();
+
+    if (education !== undefined) {
+      if (!Array.isArray(education)) {
+        return res.status(400).json({ message: 'Education must be an array' });
+      }
+      if (education.length > 5) {
+        return res.status(400).json({ message: 'Maximum 5 education items allowed' });
+      }
+      instructorUpdate.education = education
+        .map((item) => ({
+          degree: typeof item?.degree === 'string' ? item.degree.trim() : '',
+          fieldOfStudy: typeof item?.fieldOfStudy === 'string' ? item.fieldOfStudy.trim() : '',
+          institution: typeof item?.institution === 'string' ? item.institution.trim() : '',
+        }))
+        .filter((item) => item.degree || item.fieldOfStudy || item.institution);
+    }
+
+    if (skills !== undefined) {
+      if (!Array.isArray(skills)) {
+        return res.status(400).json({ message: 'Skills must be an array' });
+      }
+      if (skills.length > 6) {
+        return res.status(400).json({ message: 'Maximum 6 skills allowed' });
+      }
+      const cleanSkills = [];
+      for (const item of skills) {
+        const skillName = typeof item?.name === 'string' ? item.name.trim() : '';
+        const level = Number(item?.level ?? 80);
+        if (!skillName) {
+          return res.status(400).json({ message: 'Each skill must have a non-empty name' });
+        }
+        if (!Number.isFinite(level) || level < 0 || level > 100) {
+          return res.status(400).json({ message: 'Each skill level must be a number between 0 and 100' });
+        }
+        cleanSkills.push({ name: skillName, level: Math.round(level) });
+      }
+      instructorUpdate.skills = cleanSkills;
+    }
+
+    const updatedUser =
+      Object.keys(userUpdate).length > 0
+        ? await User.findByIdAndUpdate(req.auth.id, userUpdate, { new: true, runValidators: true })
+        : await User.findById(req.auth.id);
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (userUpdate.name) {
+      await Course.updateMany(
+        { 'instructor.ref': updatedUser._id },
+        { $set: { 'instructor.name': updatedUser.name } }
+      );
+    }
+
+    const instructor = await Instructor.findOneAndUpdate(
+      { user: req.auth.id },
+      { $set: instructorUpdate },
+      { new: true, upsert: true, runValidators: true }
+    );
+
+    return res.json({
+      message: 'Educator profile updated successfully',
+      user: updatedUser,
+      instructor,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
