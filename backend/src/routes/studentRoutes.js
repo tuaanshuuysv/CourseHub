@@ -10,6 +10,7 @@ import Instructor from '../models/Instructor.js';
 import Course from '../models/Course.js';
 import LearningStreak from '../models/LearningStreak.js';
 import Wishlist from '../models/Wishlist.js';
+import Cart from '../models/Cart.js';
 import { authenticate, requireRole, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
 import { AVATARS_DIR, uploadAvatar } from '../middleware/upload.js';
 
@@ -273,6 +274,23 @@ router.post('/wishlist/toggle', async (req, res, next) => {
 
     await Wishlist.create({ userId: req.auth.id, courseId: course._id });
     return res.json({ wished: true, message: 'Added to wishlist' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-3.3 Lay danh sach khoa hoc trong gio hang cua hoc vien
+router.get('/cart', async (req, res, next) => {
+  try {
+    const cart = await Cart.findOne({ user: req.auth.id }).populate({
+      path: 'courses.course',
+      match: { isDeleted: false },
+      select: '-curriculum',
+      populate: { path: 'category', select: 'name slug color' },
+    });
+
+    const list = (cart?.courses || []).map((item) => item.course).filter(Boolean);
+    return res.json(list);
   } catch (err) {
     return next(err);
   }
