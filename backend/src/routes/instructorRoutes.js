@@ -632,4 +632,31 @@ router.put('/courses/:id', async (req, res, next) => {
   }
 });
 
+// Xoa mem khoa hoc thuoc quyen so huu cua giang vien va go khoi danh sach myCourses
+router.delete('/courses/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+
+    const course = await Course.findOneAndUpdate(
+      { _id: req.params.id, 'instructor.ref': req.auth.id, isDeleted: false },
+      { $set: { isDeleted: true } },
+      { new: true }
+    );
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    await Instructor.findOneAndUpdate(
+      { user: req.auth.id },
+      { $pull: { myCourses: course._id } }
+    );
+
+    return res.json({ message: 'Course deleted successfully' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
