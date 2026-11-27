@@ -296,4 +296,47 @@ router.get('/cart', async (req, res, next) => {
   }
 });
 
+// UC-3.3 Them khoa hoc vao gio hang (chan khoa chua duyet, khoa cua chinh minh, da mua hoac trung)
+router.post('/cart', async (req, res, next) => {
+  try {
+    const { courseId } = req.body || {};
+    if (!mongoose.isValidObjectId(courseId)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+
+    const course = await Course.findOne({
+      _id: courseId,
+      status: 'Live',
+      isDeleted: false,
+      isPrivate: false,
+    }).select('_id instructor.ref');
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found or unavailable' });
+    }
+
+    if (String(course.instructor?.ref) === String(req.auth.id)) {
+      return res.status(400).json({ message: 'You cannot purchase your own course' });
+    }
+
+    const student = await Student.findOne({ user: req.auth.id });
+    if (student?.myCourses?.some((m) => String(m.course) === String(course._id))) {
+      return res.status(409).json({ message: 'You are already enrolled in this course' });
+    }
+
+    let cart = await Cart.findOne({ user: req.auth.id });
+    if (!cart) {
+      cart = await Cart.create({ user: req.auth.id, courses: [] });
+    }
+    if (cart.courses.some((c) => String(c.course) === String(course._id))) {
+      return res.status(409).json({ message: 'Course already in cart' });
+    }
+
+    cart.courses.push({ course: course._id });
+    await cart.save();
+    return res.status(201).json({ message: 'Added to cart!' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
