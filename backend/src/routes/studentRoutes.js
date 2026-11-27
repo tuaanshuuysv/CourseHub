@@ -8,7 +8,7 @@ import Student from '../models/Student.js';
 import Instructor from '../models/Instructor.js';
 import Course from '../models/Course.js';
 import LearningStreak from '../models/LearningStreak.js';
-import { authenticate, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
+import { authenticate, requireRole, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
 import { AVATARS_DIR, uploadAvatar } from '../middleware/upload.js';
 
 const router = express.Router();
@@ -194,6 +194,39 @@ router.put('/change-password', async (req, res, next) => {
     setAuthCookie(res, token);
 
     return res.json({ message: 'Password changed successfully!', token });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-3.1 Hoc vien gui don dang ky tro thanh Giang vien cho Admin phe duyet
+router.post('/become-instructor', requireRole('student'), async (req, res, next) => {
+  try {
+    const existing = await Instructor.findOne({ user: req.auth.id });
+    if (existing) {
+      return res.status(409).json({ message: 'Application already submitted' });
+    }
+
+    const occupation = typeof req.body?.occupation === 'string' ? req.body.occupation.trim() : '';
+    const introduction = typeof req.body?.introduction === 'string' ? req.body.introduction.trim() : '';
+    const address = typeof req.body?.address === 'string' ? req.body.address.trim() : '';
+
+    if (!occupation || !introduction) {
+      return res.status(400).json({ message: 'Occupation and introduction are required' });
+    }
+
+    const application = await Instructor.create({
+      user: req.auth.id,
+      occupation,
+      introduction,
+      address,
+      isApproved: false,
+    });
+
+    return res.status(201).json({
+      message: 'Registration successful. Waiting for Admin approval.',
+      application,
+    });
   } catch (err) {
     return next(err);
   }
