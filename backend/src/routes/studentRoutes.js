@@ -583,4 +583,53 @@ router.post('/checkout', async (req, res, next) => {
   }
 });
 
+// UC-3.5 & UC-3.7 Lay danh sach khoa hoc da ghi danh kem phan tram tien do va chuoi ngay hoc
+router.get('/my-courses', async (req, res, next) => {
+  try {
+    const [student, progresses, streak] = await Promise.all([
+      Student.findOne({ user: req.auth.id }).populate({
+        path: 'myCourses.course',
+        match: { isDeleted: false },
+        select: '-curriculum',
+        populate: { path: 'category', select: 'name slug color' },
+      }),
+      CourseProgress.find({ userId: req.auth.id }),
+      LearningStreak.findOne({ userId: req.auth.id }),
+    ]);
+
+    const progressMap = Object.fromEntries(progresses.map((p) => [String(p.courseId), p]));
+
+    const enrolled = (student?.myCourses || [])
+      .filter((m) => Boolean(m.course))
+      .map((m) => {
+        const course = m.course;
+        const prog = progressMap[String(course._id)];
+        const totalLessons = course.lecturesCount || prog?.totalLectures || 1;
+        const completed = prog?.completedLecturesCount || 0;
+        return {
+          ...course.toObject(),
+          enrolledAt: m.enrolledAt,
+          progress: {
+            completedLecturesCount: completed,
+            totalLectures: totalLessons,
+            percent: Math.min(100, Math.round((completed / totalLessons) * 100)),
+            lastLectureId: prog?.lastLectureId || null,
+            lastPositionSec: prog?.lastPositionSec || 0,
+            completedLectureIds: (prog?.lectures || [])
+              .filter((l) => l.status === 'Completed')
+              .map((l) => String(l.lectureId)),
+          },
+        };
+      });
+
+    return res.json({
+      courses: enrolled,
+      streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
+      stats: student?.stats || { totalCourses: 0, completedCourses: 0, totalLessons: 0, completedLessons: 0 },
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
