@@ -351,7 +351,7 @@ export default function LearningCoursePage() {
                   return (
                     <div key={q._id} style={{ padding: 14, borderRadius: 12, background: 'var(--bg-canvas)' }}>
                       <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                        {qi + 1}. {q.questionText}
+                        {qi + 1}. {q.question}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {(q.options || []).map((opt) => (

@@ -652,7 +652,7 @@ function sanitizeCourseForLearning(courseDoc) {
       ...lecture,
       questions: (lecture.questions || []).map((q) => ({
         _id: q._id,
-        questionText: q.questionText,
+        question: q.question,
         options: q.options,
       })),
     })),

@@ -69,7 +69,7 @@ export default function StudentDashboardPage() {
 
   const progressChart = useMemo(() => {
     const categories = myCourses.length > 0
-      ? myCourses.slice(0, 6).map((c) => (c.title.length > 18 ? `${c.title.slice(0, 18)}...` : c.title))
+      ? myCourses.slice(0, 6).map((c) => (c.title.length > 14 ? `${c.title.slice(0, 14)}...` : c.title))
       : ['No Courses'];
     const data = myCourses.length > 0
       ? myCourses.slice(0, 6).map((c) => c.progress?.percent ?? 0)
@@ -81,7 +81,10 @@ export default function StudentDashboardPage() {
         colors: ['#0f766e'],
         plotOptions: { bar: { borderRadius: 8, columnWidth: '46%' } },
         dataLabels: { enabled: false },
-        xaxis: { categories },
+        xaxis: {
+          categories,
+          labels: { hideOverlappingLabels: false, trim: true, style: { fontSize: '11px' } },
+        },
         yaxis: { min: 0, max: 100, labels: { formatter: (val) => `${Math.round(val)}%` } },
         grid: { borderColor: '#e4e4e7', strokeDashArray: 4 },
       },
