@@ -14,6 +14,7 @@ import Wishlist from '../models/Wishlist.js';
 import Cart from '../models/Cart.js';
 import Coupon from '../models/Coupon.js';
 import Order from '../models/Order.js';
+import Review from '../models/Review.js';
 import { authenticate, requireRole, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
 import { AVATARS_DIR, uploadAvatar } from '../middleware/upload.js';
 import { isSmtpConfigured, sendOrderConfirmationEmail } from '../services/emailService.js';
@@ -902,6 +903,65 @@ router.post('/learning/:courseId/quiz/check', async (req, res, next) => {
 
     return res.json({ results, score, total, percentage });
   } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-3.9 Hoc vien gui danh gia khoa hoc da mua va tinh lai diem trung binh bang aggregate
+router.post('/courses/:courseId/reviews', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.courseId)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+
+    const { rating, description } = req.body || {};
+    const parsedRating = Number(rating);
+    const cleanDesc = typeof description === 'string' ? description.trim() : '';
+    if (!Number.isFinite(parsedRating) || parsedRating < 1 || parsedRating > 5 || !cleanDesc) {
+      return res.status(400).json({ message: 'Please provide a rating between 1 and 5 and a review comment' });
+    }
+
+    const course = await Course.findOne({ _id: req.params.courseId, isDeleted: false }).select('_id');
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const isEnrolled = await Student.exists({ user: req.auth.id, 'myCourses.course': course._id });
+    if (!isEnrolled) {
+      return res.status(403).json({ message: 'You must purchase this course to submit a review' });
+    }
+
+    const review = await Review.create({
+      user: req.auth.id,
+      course: course._id,
+      rating: parsedRating,
+      description: cleanDesc,
+    });
+
+    const agg = await Review.aggregate([
+      { $match: { course: course._id, isDeleted: false } },
+      { $group: { _id: '$course', average: { $avg: '$rating' }, count: { $sum: 1 } } },
+    ]);
+    const nextRating =
+      agg.length > 0
+        ? { average: Number(agg[0].average.toFixed(1)), count: agg[0].count }
+        : { average: 0, count: 0 };
+
+    await Course.findByIdAndUpdate(course._id, {
+      'rating.average': nextRating.average,
+      'rating.count': nextRating.count,
+    });
+
+    const populated = await review.populate('user', 'name pfpImg');
+    return res.status(201).json({
+      message: 'Review submitted!',
+      review: populated,
+      rating: nextRating,
+    });
+  } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ message: 'You have already reviewed this course' });
+    }
     return next(err);
   }
 });
