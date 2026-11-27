@@ -11,6 +11,12 @@ import { VIDEOS_DIR, uploadThumbnail, uploadVideo } from '../middleware/upload.j
 const router = express.Router();
 const DRAFT_VIDEO_TTL_MS = 24 * 60 * 60 * 1000;
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const VALID_COURSE_STATUSES = ['Draft', 'Pending', 'Live', 'Rejected', 'Blocked'];
+
+// Thoat cac ky tu dac biet cua Regex de chong tan cong ReDoS khi tim kiem
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 // Tat ca tuyen API giang vien deu yeu cau dang nhap dung vai tro instructor
 router.use(authenticate, requireInstructor);
@@ -116,6 +122,32 @@ router.get('/dashboard', async (req, res, next) => {
       monthlyRevenue: MONTH_LABELS.map((month, idx) => ({ month, amount: monthly[idx] })),
       instructor: instructorDoc || null,
     });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-4.6 & UC-4.10 Lay danh sach khoa hoc so huu cua giang vien kem tim kiem va loc trang thai
+router.get('/courses', async (req, res, next) => {
+  try {
+    const q = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
+    const status = typeof req.query?.status === 'string' ? req.query.status.trim() : 'All';
+
+    const filter = { 'instructor.ref': req.auth.id, isDeleted: false };
+    if (status && status !== 'All' && VALID_COURSE_STATUSES.includes(status)) {
+      filter.status = status;
+    }
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), 'i');
+      filter.$or = [{ title: rx }, { subtitle: rx }];
+    }
+
+    const courses = await Course.find(filter)
+      .select('-curriculum')
+      .populate('category', 'name slug color')
+      .sort({ createdAt: -1 });
+
+    return res.json(courses);
   } catch (err) {
     return next(err);
   }
