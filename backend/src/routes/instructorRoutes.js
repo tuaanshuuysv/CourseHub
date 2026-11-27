@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
+import mongoose from 'mongoose';
 import Course from '../models/Course.js';
 import DraftVideo from '../models/DraftVideo.js';
 import Instructor from '../models/Instructor.js';
 import Order from '../models/Order.js';
+import Review from '../models/Review.js';
 import { authenticate, requireInstructor } from '../middleware/auth.js';
 import { VIDEOS_DIR, uploadThumbnail, uploadVideo } from '../middleware/upload.js';
 
@@ -148,6 +150,36 @@ router.get('/courses', async (req, res, next) => {
       .sort({ createdAt: -1 });
 
     return res.json(courses);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-4.9 Lay chi tiet mot khoa hoc so huu kem day du giao trinh, dap an quiz va danh gia
+router.get('/courses/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+
+    const course = await Course.findOne({
+      _id: req.params.id,
+      'instructor.ref': req.auth.id,
+      isDeleted: false,
+    }).populate('category', 'name slug color');
+
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const reviews = await Review.find({ course: course._id, isDeleted: false })
+      .populate('user', 'name pfpImg')
+      .sort({ createdAt: -1 });
+
+    return res.json({
+      ...course.toObject(),
+      reviews,
+    });
   } catch (err) {
     return next(err);
   }
