@@ -11,6 +11,7 @@ import Course from '../models/Course.js';
 import LearningStreak from '../models/LearningStreak.js';
 import Wishlist from '../models/Wishlist.js';
 import Cart from '../models/Cart.js';
+import Coupon from '../models/Coupon.js';
 import { authenticate, requireRole, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
 import { AVATARS_DIR, uploadAvatar } from '../middleware/upload.js';
 
@@ -351,6 +352,44 @@ router.delete('/cart/:courseId', async (req, res, next) => {
       { $pull: { courses: { course: req.params.courseId } } }
     );
     return res.json({ message: 'Removed from cart' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-3.4 Kiem tra tinh hop le, thoi han va lich su su dung cua ma giam gia
+router.post('/coupons/validate', async (req, res, next) => {
+  try {
+    const code = typeof req.body?.code === 'string' ? req.body.code.trim().toUpperCase() : '';
+    if (!code) {
+      return res.status(400).json({ message: 'Coupon code is required' });
+    }
+
+    const coupon = await Coupon.findOne({ code, isActive: true });
+    if (!coupon) {
+      return res.status(404).json({ message: 'Coupon is invalid or inactive' });
+    }
+
+    const now = new Date();
+    if (coupon.startDate && coupon.startDate > now) {
+      return res.status(400).json({ message: 'Coupon is not active yet' });
+    }
+    if (coupon.expiryDate < now) {
+      return res.status(400).json({ message: 'Coupon has expired' });
+    }
+    if ((coupon.usersUsed || []).some((uid) => String(uid) === String(req.auth.id))) {
+      return res.status(409).json({ message: 'You have already used this coupon' });
+    }
+
+    return res.json({
+      coupon: {
+        _id: coupon._id,
+        code: coupon.code,
+        description: coupon.description,
+        discountPercent: coupon.discountPercent,
+        expiryDate: coupon.expiryDate,
+      },
+    });
   } catch (err) {
     return next(err);
   }
