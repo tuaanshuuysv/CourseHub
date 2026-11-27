@@ -854,4 +854,56 @@ router.post('/learning/:courseId/progress', async (req, res, next) => {
   }
 });
 
+// UC-3.8 Cham diem bai trac nghiem gan voi tung bai giang phia may chu
+router.post('/learning/:courseId/quiz/check', async (req, res, next) => {
+  try {
+    const { lectureId, answers } = req.body || {};
+
+    if (!mongoose.isValidObjectId(req.params.courseId)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+    if (!mongoose.isValidObjectId(lectureId)) {
+      return res.status(400).json({ message: 'Invalid lectureId' });
+    }
+
+    const course = await Course.findOne({ _id: req.params.courseId, isDeleted: false });
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const allowed = await hasCourseLearningAccess(req.auth.id, course);
+    if (!allowed) {
+      return res.status(403).json({ message: 'You must enroll in this course to take this quiz' });
+    }
+
+    const allLectures = (course.curriculum || []).flatMap((sec) => sec.lectures || []);
+    const lecture = allLectures.find((l) => String(l._id) === String(lectureId));
+    if (!lecture) {
+      return res.status(404).json({ message: 'Lecture not found in this course' });
+    }
+
+    const answerMap = answers && typeof answers === 'object' ? answers : {};
+    const results = (lecture.questions || []).map((q) => {
+      const rawSelected = answerMap[String(q._id)];
+      const selected = typeof rawSelected === 'string' ? rawSelected : '';
+      const isCorrect = selected === q.correctAnswer;
+      return {
+        questionId: q._id,
+        selected,
+        correctAnswer: q.correctAnswer,
+        isCorrect,
+        explanation: q.explanation || '',
+      };
+    });
+
+    const total = results.length;
+    const score = results.filter((r) => r.isCorrect).length;
+    const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+
+    return res.json({ results, score, total, percentage });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
