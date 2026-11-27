@@ -19,6 +19,7 @@ import EducatorCoursesPage from '@/pages/educator/EducatorCoursesPage';
 import EducatorCourseDetailsPage from '@/pages/educator/EducatorCourseDetailsPage';
 import CourseFormPage from '@/pages/educator/CourseFormPage';
 import EducatorStudentsPage from '@/pages/educator/EducatorStudentsPage';
+import EducatorEarningsPage from '@/pages/educator/EducatorEarningsPage';
 
 // Thanh thong bao nhanh hien thi trang thai thao tac toan cuc
 function ToastBanner() {
@@ -173,6 +174,14 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={['instructor']}>
               <EducatorStudentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/instructor/earnings"
+          element={
+            <ProtectedRoute allowedRoles={['instructor']}>
+              <EducatorEarningsPage />
             </ProtectedRoute>
           }
         />
