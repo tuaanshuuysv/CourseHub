@@ -151,6 +151,22 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/instructor/edit-course"
+          element={
+            <ProtectedRoute allowedRoles={['instructor']}>
+              <CourseFormPage mode="edit" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/instructor/edit-course/:id"
+          element={
+            <ProtectedRoute allowedRoles={['instructor']}>
+              <CourseFormPage mode="edit" />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

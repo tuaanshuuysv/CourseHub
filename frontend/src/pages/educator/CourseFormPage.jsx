@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   FaArrowDown,
   FaArrowLeft,
@@ -78,10 +78,58 @@ function readVideoDurationSec(file) {
   });
 }
 
-// Man hinh tao khoa hoc moi kem upload anh bia, upload video bai giang va trinh soan trac nghiem
-export default function CourseFormPage() {
+// Chuyen doi giao trinh tu MongoDB sang trang thai trinh soan thao va giu nguyen _id bai giang/cau hoi
+function hydrateCurriculumFromCourse(rawCurriculum) {
+  if (!Array.isArray(rawCurriculum) || rawCurriculum.length === 0) {
+    return [createEmptySection(1)];
+  }
+  return rawCurriculum.map((sec, sIdx) => ({
+    uid: sec._id || makeUid(),
+    _id: sec._id || undefined,
+    section: sec.section || `Module ${sIdx + 1}`,
+    lectures:
+      Array.isArray(sec.lectures) && sec.lectures.length > 0
+        ? sec.lectures.map((lec, lIdx) => ({
+            uid: lec._id || makeUid(),
+            _id: lec._id || undefined,
+            title: lec.title || `Lecture ${lIdx + 1}`,
+            videoUrl: lec.videoUrl || '',
+            duration: Number(lec.duration ?? 600),
+            isFree: Boolean(lec.isFree),
+            uploading: false,
+            quizOpen: false,
+            questions: Array.isArray(lec.questions)
+              ? lec.questions.map((q) => {
+                  const baseOpts = Array.isArray(q.options) ? q.options.map((o) => String(o ?? '')) : [];
+                  while (baseOpts.length < 4) baseOpts.push('');
+                  const matchedIdx = baseOpts.findIndex((o) => o === q.correctAnswer);
+                  return {
+                    uid: q._id || makeUid(),
+                    _id: q._id || undefined,
+                    question: q.question || '',
+                    options: baseOpts,
+                    correctIndex: matchedIdx >= 0 ? matchedIdx : 0,
+                    explanation: q.explanation || '',
+                  };
+                })
+              : [],
+          }))
+        : [createEmptyLecture(1)],
+  }));
+}
+
+// Man hinh tao va chinh sua khoa hoc kem upload anh bia, upload video bai giang va trinh soan trac nghiem
+export default function CourseFormPage({ mode = 'create' }) {
+  const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser, categories, notify, refreshPublicCatalog } = useCourseHub();
+  const isEdit = mode === 'edit';
+
+  const [courseId, setCourseId] = useState(id || '');
+  const [originalStatus, setOriginalStatus] = useState('Pending');
+  const [ownedCourses, setOwnedCourses] = useState([]);
+  const [loadingCourse, setLoadingCourse] = useState(isEdit);
+  const [loadError, setLoadError] = useState('');
 
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
@@ -106,11 +154,92 @@ export default function CourseFormPage() {
     [categories]
   );
 
+  // Nap du lieu khoa hoc khi mo che do chinh sua hoac dat lai form khi chuyen sang tao moi
   useEffect(() => {
-    if (!categoryId && activeCategories.length > 0) {
+    let active = true;
+
+    if (!isEdit) {
+      setCourseId('');
+      setOriginalStatus('Pending');
+      setLoadingCourse(false);
+      setLoadError('');
+      setTitle('');
+      setSubtitle('');
+      setDescription('');
+      setLevel('Intermediate');
+      setLanguage('English / Vietnamese');
+      setDuration(12);
+      setDurationUnit('HOUR');
+      setPrice(79);
+      setEnableDiscount(false);
+      setDiscountPrice(49);
+      setStatus('Pending');
+      setThumbnail('/media/courses/01.jpg');
+      setObjectives(['']);
+      setSections([createEmptySection(1)]);
+      return () => {
+        active = false;
+      };
+    }
+
+    (async () => {
+      setLoadingCourse(true);
+      setLoadError('');
+      try {
+        const list = await api.get('/api/instructor/courses');
+        if (!active) return;
+        const safeList = Array.isArray(list) ? list : [];
+        setOwnedCourses(safeList);
+
+        const targetId = id || safeList[0]?._id || '';
+        if (!targetId) {
+          setCourseId('');
+          setLoadError('You have not created any courses to edit yet');
+          return;
+        }
+
+        const detail = await api.get(`/api/instructor/courses/${targetId}`);
+        if (!active) return;
+
+        setCourseId(detail._id);
+        setOriginalStatus(detail.status || 'Pending');
+        setTitle(detail.title || '');
+        setSubtitle(detail.subtitle || '');
+        setDescription(detail.description || '');
+        setCategoryId(detail.category?._id || detail.category || '');
+        setLevel(detail.level || 'Intermediate');
+        setLanguage(detail.language || 'English / Vietnamese');
+        setDuration(detail.duration ?? 12);
+        setDurationUnit(detail.durationUnit || 'HOUR');
+        setPrice(detail.price ?? 0);
+        setEnableDiscount(Boolean(detail.enableDiscount));
+        setDiscountPrice(detail.discountPrice ?? detail.price ?? 0);
+        setStatus(
+          detail.status === 'Live' || detail.status === 'Blocked' || detail.status === 'Draft'
+            ? detail.status
+            : 'Pending'
+        );
+        setThumbnail(detail.thumbnail || detail.image || '/media/courses/01.jpg');
+        setObjectives(Array.isArray(detail.objectives) && detail.objectives.length > 0 ? detail.objectives : ['']);
+        setSections(hydrateCurriculumFromCourse(detail.curriculum));
+      } catch (err) {
+        if (!active) return;
+        setLoadError(err.message || 'Unable to load course for editing');
+      } finally {
+        if (active) setLoadingCourse(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isEdit, id]);
+
+  useEffect(() => {
+    if (!isEdit && !categoryId && activeCategories.length > 0) {
       setCategoryId(activeCategories[0]._id);
     }
-  }, [categoryId, activeCategories]);
+  }, [isEdit, categoryId, activeCategories]);
 
   const selectedCategoryName =
     activeCategories.find((c) => c._id === categoryId)?.name || 'General';
@@ -270,6 +399,7 @@ export default function CourseFormPage() {
             return;
           }
           qPayloads.push({
+            ...(q._id ? { _id: q._id } : {}),
             question: q.question.trim(),
             options: trimmedOptions,
             correctAnswer: selectedOpt,
@@ -278,6 +408,7 @@ export default function CourseFormPage() {
         }
 
         lecPayloads.push({
+          ...(lec._id ? { _id: lec._id } : {}),
           title: lec.title.trim(),
           videoUrl: lec.videoUrl || '/media/videos/720p.mp4',
           duration: Math.max(0, Number(lec.duration) || 600),
@@ -287,6 +418,7 @@ export default function CourseFormPage() {
       }
 
       curriculumPayload.push({
+        ...(sec._id ? { _id: sec._id } : {}),
         section: sec.section.trim(),
         order: sIdx + 1,
         lectures: lecPayloads,
@@ -316,9 +448,12 @@ export default function CourseFormPage() {
 
     setSubmitting(true);
     try {
-      const res = await api.post('/api/instructor/courses', payload);
+      const res =
+        isEdit && courseId
+          ? await api.put(`/api/instructor/courses/${courseId}`, payload)
+          : await api.post('/api/instructor/courses', payload);
       await refreshPublicCatalog();
-      notify(res.message || 'Course created successfully');
+      notify(res.message || (isEdit ? 'Course updated successfully' : 'Course created successfully'));
       navigate(`/instructor/courses/${res.course._id}`);
     } catch (err) {
       notify(err.message, 'danger');
@@ -329,15 +464,62 @@ export default function CourseFormPage() {
 
   const previewPrice = enableDiscount && Number(discountPrice) < Number(price) ? Number(discountPrice) : Number(price);
 
+  if (isEdit && loadingCourse) {
+    return (
+      <WorkspaceLayout variant="educator" title="Edit Course" subtitle="Loading course editor...">
+        <div className="ch-card ch-card--pad" style={{ textAlign: 'center', padding: 48, color: 'var(--ink-muted)' }}>
+          Loading course details...
+        </div>
+      </WorkspaceLayout>
+    );
+  }
+
+  if (isEdit && loadError) {
+    return (
+      <WorkspaceLayout variant="educator" title="Edit Course" subtitle="No course available">
+        <div className="ch-card ch-card--pad" style={{ textAlign: 'center', padding: 48 }}>
+          <h3 style={{ marginBottom: 8 }}>{loadError}</h3>
+          <p style={{ color: 'var(--ink-muted)', marginBottom: 16 }}>
+            Create a new course first or select an existing course from My Courses.
+          </p>
+          <Link to="/instructor/create-course" className="ch-btn ch-btn--primary">
+            <FaPlus /> Create New Course
+          </Link>
+        </div>
+      </WorkspaceLayout>
+    );
+  }
+
   return (
     <WorkspaceLayout
       variant="educator"
-      title="Create New Course"
-      subtitle="Upload course thumbnail and lecture videos, organize sections, and attach quizzes to any lecture."
+      title={isEdit ? 'Edit Course' : 'Create New Course'}
+      subtitle={
+        isEdit
+          ? `Editing: ${title || 'Selected Course'}`
+          : 'Upload course thumbnail and lecture videos, organize sections, and attach quizzes to any lecture.'
+      }
       actions={
-        <Link to="/instructor/courses" className="ch-btn ch-btn--sm ch-btn--outline">
-          <FaArrowLeft /> Back to Courses
-        </Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {isEdit && ownedCourses.length > 1 && (
+            <select
+              className="ch-select"
+              style={{ width: 230 }}
+              value={courseId}
+              onChange={(e) => navigate(`/instructor/edit-course/${e.target.value}`)}
+              title="Switch course to edit"
+            >
+              {ownedCourses.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.title}
+                </option>
+              ))}
+            </select>
+          )}
+          <Link to="/instructor/courses" className="ch-btn ch-btn--sm ch-btn--outline">
+            <FaArrowLeft /> Back to Courses
+          </Link>
+        </div>
       }
     >
       <div style={{ display: 'grid', gridTemplateColumns: '1.45fr 0.7fr', gap: 22, alignItems: 'start' }}>
@@ -401,10 +583,21 @@ export default function CourseFormPage() {
               </div>
 
               <div className="ch-field">
-                <label className="ch-label">Submission Status</label>
-                <select className="ch-select" value={status} onChange={(e) => setStatus(e.target.value)}>
-                  <option value="Pending">Submit for Review (Pending)</option>
-                  <option value="Draft">Save as Draft</option>
+                <label className="ch-label">Course Status</label>
+                <select
+                  className="ch-select"
+                  value={status}
+                  disabled={isEdit && originalStatus === 'Blocked'}
+                  onChange={(e) => setStatus(e.target.value)}
+                >
+                  {isEdit && originalStatus === 'Live' && <option value="Live">Live (Published)</option>}
+                  {isEdit && originalStatus === 'Blocked' && <option value="Blocked">Blocked (Admin Action)</option>}
+                  {(!isEdit || originalStatus !== 'Blocked') && (
+                    <>
+                      <option value="Pending">Submit for Review (Pending)</option>
+                      <option value="Draft">Save as Draft</option>
+                    </>
+                  )}
                 </select>
               </div>
             </div>
@@ -878,7 +1071,14 @@ export default function CourseFormPage() {
               disabled={submitting || uploadingThumb || isAnyVideoUploading}
               className="ch-btn ch-btn--coral ch-btn--lg"
             >
-              <FaCheckCircle /> {submitting ? 'Creating Course...' : 'Submit Course'}
+              <FaCheckCircle />{' '}
+              {submitting
+                ? isEdit
+                  ? 'Saving Changes...'
+                  : 'Creating Course...'
+                : isEdit
+                  ? 'Save Course Changes'
+                  : 'Submit Course'}
             </button>
           </div>
         </form>
