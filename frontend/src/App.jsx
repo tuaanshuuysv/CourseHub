@@ -9,6 +9,7 @@ import SignInPage from '@/pages/guest/SignInPage';
 import SignUpPage from '@/pages/guest/SignUpPage';
 import ForgotPasswordPage from '@/pages/guest/ForgotPasswordPage';
 import StudentDashboardPage from '@/pages/student/StudentDashboardPage';
+import WishlistPage from '@/pages/student/WishlistPage';
 
 // Thanh thong bao nhanh hien thi trang thai thao tac toan cuc
 function ToastBanner() {
@@ -57,6 +58,14 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={['student', 'instructor']}>
               <CourseDetailsPage insideStudent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/student/wishlist"
+          element={
+            <ProtectedRoute allowedRoles={['student', 'instructor']}>
+              <WishlistPage />
             </ProtectedRoute>
           }
         />
