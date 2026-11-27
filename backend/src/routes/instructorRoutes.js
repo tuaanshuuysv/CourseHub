@@ -870,4 +870,25 @@ router.get('/earnings', async (req, res, next) => {
   }
 });
 
+// UC-2.1 Lay thong tin ho so chuyen mon cua giang vien (hoc van, ky nang, kinh nghiem, chung chi)
+router.get('/profile', async (req, res, next) => {
+  try {
+    const [user, instructor] = await Promise.all([
+      User.findById(req.auth.id),
+      Instructor.findOne({ user: req.auth.id }),
+    ]);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.json({
+      user,
+      instructor: instructor || null,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
