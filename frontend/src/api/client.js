@@ -34,11 +34,35 @@ async function request(method, path, body) {
   return data;
 }
 
-// Doi tuong tien ich cung cap cac phuong thuc REST
+// Ham tai len tep da phan (multipart/form-data) toi Express backend
+async function uploadRequest(path, formData, method = 'POST') {
+  const headers = {};
+  const token = getStoredToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    credentials: 'include',
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.message || `Upload failed (${res.status})`);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+// Doi tuong tien ich cung cap cac phuong thuc REST va tai tep
 export const api = {
   get: (path) => request('GET', path),
   post: (path, body) => request('POST', path, body),
   put: (path, body) => request('PUT', path, body),
   patch: (path, body) => request('PATCH', path, body),
   delete: (path) => request('DELETE', path),
+  upload: (path, formData, method = 'POST') => uploadRequest(path, formData, method),
 };
