@@ -20,6 +20,7 @@ import { isSmtpConfigured, sendOrderConfirmationEmail } from '../services/emailS
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_PROGRESS_STATUSES = ['Not_Started', 'In_Progress', 'Completed'];
 
 // Tat ca tuyen API hoc vien deu yeu cau dang nhap va thuoc vai tro student/instructor
 router.use(authenticate, requireStudent);
@@ -699,6 +700,152 @@ router.get('/learning/:courseId', async (req, res, next) => {
 
     return res.json({
       course: sanitizeCourseForLearning(course),
+      progress,
+      streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-3.6, UC-3.7 & UC-3.10 Cap nhat moc xem video, hoan thanh bai giang va chuoi ngay hoc
+router.post('/learning/:courseId/progress', async (req, res, next) => {
+  try {
+    const { lectureId, status, lastPositionSec = 0, timeDeltaSec = 0 } = req.body || {};
+
+    if (!mongoose.isValidObjectId(req.params.courseId)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+    if (!mongoose.isValidObjectId(lectureId)) {
+      return res.status(400).json({ message: 'Invalid lectureId' });
+    }
+    if (status !== undefined && !VALID_PROGRESS_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Invalid progress status' });
+    }
+
+    const posSec = Number(lastPositionSec);
+    const deltaSec = Number(timeDeltaSec);
+    if (!Number.isFinite(posSec) || posSec < 0 || !Number.isFinite(deltaSec) || deltaSec < 0) {
+      return res.status(400).json({ message: 'lastPositionSec and timeDeltaSec must be non-negative numbers' });
+    }
+
+    const course = await Course.findOne({ _id: req.params.courseId, isDeleted: false });
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const allowed = await hasCourseLearningAccess(req.auth.id, course);
+    if (!allowed) {
+      return res.status(403).json({ message: 'You must enroll in this course to update learning progress' });
+    }
+
+    const allLectures = (course.curriculum || []).flatMap((sec) => sec.lectures || []);
+    const targetLecture = allLectures.find((l) => String(l._id) === String(lectureId));
+    if (!targetLecture) {
+      return res.status(404).json({ message: 'Lecture not found in this course' });
+    }
+
+    let progress = await CourseProgress.findOne({ userId: req.auth.id, courseId: course._id });
+    if (!progress) {
+      progress = await CourseProgress.create({
+        userId: req.auth.id,
+        courseId: course._id,
+        totalLectures: allLectures.length,
+        lectures: allLectures.map((l) => ({
+          lectureId: l._id,
+          status: 'Not_Started',
+          durationSec: l.duration || 600,
+        })),
+      });
+    }
+
+    let lecEntry = progress.lectures.find((l) => String(l.lectureId) === String(targetLecture._id));
+    if (!lecEntry) {
+      progress.lectures.push({
+        lectureId: targetLecture._id,
+        status: status || 'In_Progress',
+        durationSec: targetLecture.duration || 600,
+        lastPositionSec: posSec,
+      });
+      lecEntry = progress.lectures[progress.lectures.length - 1];
+    }
+
+    const prevStatus = lecEntry.status;
+    if (status) {
+      lecEntry.status = status;
+    }
+    if (lecEntry.status === 'Completed' && !lecEntry.completedAt) {
+      lecEntry.completedAt = new Date();
+    } else if (lecEntry.status === 'Not_Started') {
+      lecEntry.completedAt = undefined;
+    }
+    if (prevStatus === 'Not_Started' && lecEntry.status !== 'Not_Started') {
+      lecEntry.viewCount = (lecEntry.viewCount || 0) + 1;
+    }
+    lecEntry.lastPositionSec = posSec;
+    lecEntry.totalTimeSpentSec = (lecEntry.totalTimeSpentSec || 0) + deltaSec;
+    lecEntry.lastActivityAt = new Date();
+
+    const validLectureIds = new Set(allLectures.map((l) => String(l._id)));
+    progress.lastLectureId = targetLecture._id;
+    progress.lastPositionSec = posSec;
+    progress.lastActivityAt = new Date();
+    progress.totalLectures = allLectures.length;
+    progress.completedLecturesCount = progress.lectures.filter(
+      (l) => validLectureIds.has(String(l.lectureId)) && l.status === 'Completed'
+    ).length;
+    progress.totalTimeSpentSec = (progress.totalTimeSpentSec || 0) + deltaSec;
+    await progress.save();
+
+    // Dong bo thong ke hoan thanh tren ho so Student theo dung rang buoc cua schema
+    const student = await Student.findOne({ user: req.auth.id });
+    if (student) {
+      const enrolledSet = new Set((student.myCourses || []).map((m) => String(m.course)));
+      const allUserProg = await CourseProgress.find({ userId: req.auth.id });
+      const enrolledProgs = allUserProg.filter((p) => enrolledSet.has(String(p.courseId)));
+      const totalCompletedLessons = enrolledProgs.reduce((s, p) => s + p.completedLecturesCount, 0);
+      const totalLessonsTracked = enrolledProgs.reduce((s, p) => s + p.totalLectures, 0);
+      const completedCourses = enrolledProgs.filter(
+        (p) => p.totalLectures > 0 && p.completedLecturesCount >= p.totalLectures
+      ).length;
+
+      student.stats.totalCourses = Math.max(student.myCourses.length, completedCourses);
+      student.stats.totalLessons = Math.max(
+        student.stats.totalLessons || 0,
+        totalLessonsTracked,
+        totalCompletedLessons
+      );
+      student.stats.completedLessons = totalCompletedLessons;
+      student.stats.completedCourses = completedCourses;
+      await student.save();
+    }
+
+    // Cap nhat chuoi ngay hoc tap lien tuc khi hoc vien danh dau hoan thanh bai giang
+    let streak = await LearningStreak.findOne({ userId: req.auth.id });
+    if (status === 'Completed') {
+      const today = new Date().toISOString().slice(0, 10);
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      if (!streak) {
+        streak = await LearningStreak.create({
+          userId: req.auth.id,
+          currentStreak: 1,
+          longestStreak: 1,
+          lastActiveDate: today,
+          activeDates: [today],
+        });
+      } else if (streak.lastActiveDate !== today) {
+        const nextStreak = streak.lastActiveDate === yesterday ? streak.currentStreak + 1 : 1;
+        streak.currentStreak = nextStreak;
+        streak.longestStreak = Math.max(streak.longestStreak || 0, nextStreak);
+        streak.lastActiveDate = today;
+        if (!streak.activeDates.includes(today)) {
+          streak.activeDates.push(today);
+        }
+        await streak.save();
+      }
+    }
+
+    return res.json({
       progress,
       streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
     });
