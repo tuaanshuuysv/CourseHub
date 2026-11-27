@@ -772,4 +772,102 @@ router.get('/students', async (req, res, next) => {
   }
 });
 
+// UC-4.5 & UC-4.11 Lay bao cao doanh thu, thu nhap thang nay va so giao dich cua giang vien
+router.get('/earnings', async (req, res, next) => {
+  try {
+    const ownedCourses = await Course.find({
+      'instructor.ref': req.auth.id,
+      isDeleted: false,
+    }).select('_id title');
+    const ownedMap = Object.fromEntries(ownedCourses.map((c) => [String(c._id), c]));
+    const ownedIds = ownedCourses.map((c) => c._id);
+
+    if (ownedIds.length === 0) {
+      return res.json({
+        thisMonthNet: 0,
+        lifetimeNet: 0,
+        lifetimeGross: 0,
+        platformFees: 0,
+        byCourse: [],
+        ledger: [],
+      });
+    }
+
+    const orders = await Order.find({
+      status: 'completed',
+      'courses.course': { $in: ownedIds },
+    })
+      .populate('user', 'name email')
+      .sort({ createdAt: -1 });
+
+    const ledger = [];
+    const courseStatsMap = new Map();
+    let thisMonthNet = 0;
+    let lifetimeNet = 0;
+    let lifetimeGross = 0;
+    let platformFees = 0;
+    const now = new Date();
+
+    for (const ord of orders) {
+      const ordDate = new Date(ord.createdAt);
+      const isThisMonth =
+        ordDate.getMonth() === now.getMonth() && ordDate.getFullYear() === now.getFullYear();
+
+      for (const item of ord.courses || []) {
+        const cid = String(item.course);
+        const courseDoc = ownedMap[cid];
+        if (!courseDoc) continue;
+
+        const gross = Number(Number(item.pricePaid || 0).toFixed(2));
+        const fee = Number((gross * 0.2).toFixed(2));
+        const net = Number((gross - fee).toFixed(2));
+
+        lifetimeGross += gross;
+        platformFees += fee;
+        lifetimeNet += net;
+        if (isThisMonth) thisMonthNet += net;
+
+        const prev = courseStatsMap.get(cid) || {
+          courseId: cid,
+          title: courseDoc.title,
+          salesCount: 0,
+          gross: 0,
+          net: 0,
+        };
+        prev.salesCount += 1;
+        prev.gross = Number((prev.gross + gross).toFixed(2));
+        prev.net = Number((prev.net + net).toFixed(2));
+        courseStatsMap.set(cid, prev);
+
+        ledger.push({
+          id: `INV-${String(ord._id).slice(-6).toUpperCase()}`,
+          courseId: cid,
+          course: courseDoc.title,
+          student: ord.user?.name || 'Student',
+          studentEmail: ord.user?.email || '',
+          gross,
+          fee,
+          net,
+          method: ord.paymentMethod,
+          date: ord.createdAt,
+          status: ord.status,
+        });
+      }
+    }
+
+    const byCourse = [...courseStatsMap.values()].sort((a, b) => b.net - a.net);
+
+    return res.json({
+      thisMonthNet: Number(thisMonthNet.toFixed(2)),
+      lifetimeNet: Number(lifetimeNet.toFixed(2)),
+      lifetimeGross: Number(lifetimeGross.toFixed(2)),
+      platformFees: Number(platformFees.toFixed(2)),
+      byCourse,
+      ledger,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
