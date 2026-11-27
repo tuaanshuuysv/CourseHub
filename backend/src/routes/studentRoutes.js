@@ -632,4 +632,79 @@ router.get('/my-courses', async (req, res, next) => {
   }
 });
 
+// Kiem tra quyen truy cap phong hoc (hoc vien da ghi danh hoac giang vien so huu khoa hoc)
+async function hasCourseLearningAccess(userId, course) {
+  if (String(course.instructor?.ref) === String(userId)) {
+    return true;
+  }
+  const enrolled = await Student.exists({ user: userId, 'myCourses.course': course._id });
+  return Boolean(enrolled);
+}
+
+// An dap an va giai thich cau hoi trac nghiem khi tra ve phong hoc de chong gian lan
+function sanitizeCourseForLearning(courseDoc) {
+  const obj = courseDoc.toObject();
+  obj.curriculum = (obj.curriculum || []).map((section) => ({
+    ...section,
+    lectures: (section.lectures || []).map((lecture) => ({
+      ...lecture,
+      questions: (lecture.questions || []).map((q) => ({
+        _id: q._id,
+        questionText: q.questionText,
+        options: q.options,
+      })),
+    })),
+  }));
+  return obj;
+}
+
+// UC-3.6 & UC-3.7 Lay du lieu phong hoc cua khoa hoc da ghi danh kem tien do va chuoi ngay hoc
+router.get('/learning/:courseId', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.courseId)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+
+    const course = await Course.findOne({ _id: req.params.courseId, isDeleted: false }).populate(
+      'category',
+      'name slug color'
+    );
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const allowed = await hasCourseLearningAccess(req.auth.id, course);
+    if (!allowed) {
+      return res.status(403).json({ message: 'You must enroll in this course to access the learning studio' });
+    }
+
+    const allLectures = (course.curriculum || []).flatMap((sec) => sec.lectures || []);
+    let [progress, streak] = await Promise.all([
+      CourseProgress.findOne({ userId: req.auth.id, courseId: course._id }),
+      LearningStreak.findOne({ userId: req.auth.id }),
+    ]);
+
+    if (!progress) {
+      progress = await CourseProgress.create({
+        userId: req.auth.id,
+        courseId: course._id,
+        totalLectures: allLectures.length,
+        lectures: allLectures.map((l) => ({
+          lectureId: l._id,
+          status: 'Not_Started',
+          durationSec: l.duration || 600,
+        })),
+      });
+    }
+
+    return res.json({
+      course: sanitizeCourseForLearning(course),
+      progress,
+      streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
