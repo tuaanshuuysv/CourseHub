@@ -1,6 +1,31 @@
 import mongoose from 'mongoose';
 
-// Mo hinh du lieu ho so giang vien, hoc van va ky nang (Collection: instructors)
+// Cau truc kinh nghiem lam viec va nguoi tham chieu (cap tren cu) cua ung vien giang vien
+const workExperienceSchema = new mongoose.Schema(
+  {
+    organization: { type: String, required: true, trim: true },
+    position: { type: String, required: true, trim: true },
+    startDate: { type: String, required: true, trim: true },
+    endDate: { type: String, default: 'Present', trim: true },
+    supervisor: {
+      name: { type: String, required: true, trim: true },
+      contact: { type: String, required: true, trim: true },
+    },
+  },
+  { _id: false }
+);
+
+// Cau truc chung chi chuyen mon kem anh chup xac minh
+const certificateSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    imageUrl: { type: String, required: true, trim: true },
+    uploadedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+// Mo hinh du lieu ho so giang vien, hoc van, kinh nghiem, chung chi va ky nang (Collection: instructors)
 const instructorSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
@@ -8,6 +33,18 @@ const instructorSchema = new mongoose.Schema(
     occupation: { type: String, default: '', trim: true },
     introduction: { type: String, default: '', trim: true },
     isApproved: { type: Boolean, default: false },
+    // Danh sach kinh nghiem lam viec va thong tin cap tren cu de xac minh (toi da 10 muc)
+    workExperience: {
+      type: [workExperienceSchema],
+      default: [],
+      validate: [(arr) => arr.length <= 10, 'Maximum 10 work experience items allowed'],
+    },
+    // Danh sach chung chi kem anh chup tai len (toi da 10 muc)
+    certificates: {
+      type: [certificateSchema],
+      default: [],
+      validate: [(arr) => arr.length <= 10, 'Maximum 10 certificates allowed'],
+    },
     // Gioi han toi da 5 muc trinh do hoc van theo quy dinh ho so
     education: {
       type: [

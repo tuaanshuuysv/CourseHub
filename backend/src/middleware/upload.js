@@ -7,6 +7,7 @@ import multer from 'multer';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOADS_ROOT = path.resolve(__dirname, '../../uploads');
 export const AVATARS_DIR = path.join(UPLOADS_ROOT, 'avatars');
+export const CERTIFICATES_DIR = path.join(UPLOADS_ROOT, 'certificates');
 export const THUMBNAILS_DIR = path.join(UPLOADS_ROOT, 'thumbnails');
 export const VIDEOS_DIR = path.join(UPLOADS_ROOT, 'videos');
 
@@ -52,6 +53,13 @@ function imageFileFilter(_req, file, cb) {
 // Middleware upload anh dai dien nguoi dung (gioi han 5 MB)
 export const uploadAvatar = multer({
   storage: createDiskStorage(AVATARS_DIR, ALLOWED_IMAGE_MIME),
+  fileFilter: imageFileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+// Middleware upload anh chup chung chi dang ky giang vien (gioi han 5 MB)
+export const uploadCertificate = multer({
+  storage: createDiskStorage(CERTIFICATES_DIR, ALLOWED_IMAGE_MIME),
   fileFilter: imageFileFilter,
   limits: { fileSize: 5 * 1024 * 1024 },
 });
