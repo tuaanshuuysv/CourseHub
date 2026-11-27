@@ -8,6 +8,7 @@ import publicRoutes from './routes/publicRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import instructorRoutes from './routes/instructorRoutes.js';
 import mediaRoutes from './routes/mediaRoutes.js';
+import { startDraftVideoCleanupScheduler } from './services/draftVideoCleanup.js';
 
 // Khoi tao ung dung Express
 const app = express();
@@ -83,11 +84,16 @@ app.use((err, _req, res, _next) => {
 
 const PORT = process.env.PORT || 5000;
 let httpServer = null;
+let stopDraftVideoCleanup = null;
 
 // Co che tat may chu va dong ket noi MongoDB an toan (graceful shutdown)
 async function shutdown(signal) {
   console.log(`Received ${signal}. Shutting down CourseHub backend...`);
   try {
+    if (stopDraftVideoCleanup) {
+      stopDraftVideoCleanup();
+      stopDraftVideoCleanup = null;
+    }
     if (httpServer) {
       await new Promise((resolve) => httpServer.close(resolve));
     }
@@ -102,9 +108,10 @@ async function shutdown(signal) {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-// Ket noi MongoDB va khoi chay HTTP server
+// Ket noi MongoDB, bat tac vu don dep video nhap va khoi chay HTTP server
 connectDB()
   .then(() => {
+    stopDraftVideoCleanup = startDraftVideoCleanupScheduler();
     httpServer = app.listen(PORT, () => {
       console.log(`CourseHub Express API listening on http://localhost:${PORT}`);
     });
