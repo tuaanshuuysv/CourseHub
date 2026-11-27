@@ -339,4 +339,21 @@ router.post('/cart', async (req, res, next) => {
   }
 });
 
+// UC-3.3 Xoa mot khoa hoc khoi gio hang cua hoc vien
+router.delete('/cart/:courseId', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.courseId)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+
+    await Cart.findOneAndUpdate(
+      { user: req.auth.id },
+      { $pull: { courses: { course: req.params.courseId } } }
+    );
+    return res.json({ message: 'Removed from cart' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
