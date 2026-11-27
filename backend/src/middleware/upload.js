@@ -18,6 +18,12 @@ const ALLOWED_IMAGE_MIME = {
   'image/gif': '.gif',
 };
 
+const ALLOWED_VIDEO_MIME = {
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+  'video/quicktime': '.mov',
+};
+
 // Dam bao thu muc luu tru tep tai len ton tai truoc khi ghi
 export function ensureDirExists(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -50,6 +56,16 @@ function imageFileFilter(_req, file, cb) {
   return cb(err);
 }
 
+// Bo loc chi cho phep dinh dang video bai giang hop le (MP4, WebM, MOV)
+function videoFileFilter(_req, file, cb) {
+  if (ALLOWED_VIDEO_MIME[file.mimetype]) {
+    return cb(null, true);
+  }
+  const err = new Error('Only MP4, WebM, and MOV video files are allowed');
+  err.statusCode = 400;
+  return cb(err);
+}
+
 // Middleware upload anh dai dien nguoi dung (gioi han 5 MB)
 export const uploadAvatar = multer({
   storage: createDiskStorage(AVATARS_DIR, ALLOWED_IMAGE_MIME),
@@ -62,4 +78,18 @@ export const uploadCertificate = multer({
   storage: createDiskStorage(CERTIFICATES_DIR, ALLOWED_IMAGE_MIME),
   fileFilter: imageFileFilter,
   limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+// Middleware upload anh bia khoa hoc cho giang vien (gioi han 5 MB)
+export const uploadThumbnail = multer({
+  storage: createDiskStorage(THUMBNAILS_DIR, ALLOWED_IMAGE_MIME),
+  fileFilter: imageFileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+// Middleware upload video bai giang cho giang vien (gioi han 200 MB)
+export const uploadVideo = multer({
+  storage: createDiskStorage(VIDEOS_DIR, ALLOWED_VIDEO_MIME),
+  fileFilter: videoFileFilter,
+  limits: { fileSize: 200 * 1024 * 1024 },
 });
