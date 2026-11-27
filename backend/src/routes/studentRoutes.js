@@ -16,7 +16,7 @@ import Coupon from '../models/Coupon.js';
 import Order from '../models/Order.js';
 import Review from '../models/Review.js';
 import { authenticate, requireRole, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
-import { AVATARS_DIR, uploadAvatar } from '../middleware/upload.js';
+import { AVATARS_DIR, CERTIFICATES_DIR, uploadAvatar, uploadCertificate } from '../middleware/upload.js';
 import { isSmtpConfigured, sendOrderConfirmationEmail } from '../services/emailService.js';
 
 const router = express.Router();
@@ -49,6 +49,8 @@ router.get('/profile', async (req, res, next) => {
             isApproved: instructor.isApproved,
             occupation: instructor.occupation,
             introduction: instructor.introduction,
+            workExperience: instructor.workExperience || [],
+            certificates: instructor.certificates || [],
           }
         : null,
     });
@@ -208,7 +210,24 @@ router.put('/change-password', async (req, res, next) => {
   }
 });
 
-// UC-3.1 Hoc vien gui don dang ky tro thanh Giang vien cho Admin phe duyet
+// UC-3.1 Tai len anh chup chung chi phuc vu don dang ky tro thanh Giang vien
+router.post(
+  '/become-instructor/certificate',
+  requireRole('student'),
+  uploadCertificate.single('certificate'),
+  (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Certificate image file is required' });
+    }
+    const imageUrl = `/api/media/certificates/${req.file.filename}`;
+    return res.status(201).json({
+      message: 'Certificate image uploaded successfully',
+      imageUrl,
+    });
+  }
+);
+
+// UC-3.1 Hoc vien gui don dang ky tro thanh Giang vien kem kinh nghiem lam viec va chung chi
 router.post('/become-instructor', requireRole('student'), async (req, res, next) => {
   try {
     const existing = await Instructor.findOne({ user: req.auth.id });
@@ -224,11 +243,91 @@ router.post('/become-instructor', requireRole('student'), async (req, res, next)
       return res.status(400).json({ message: 'Occupation and introduction are required' });
     }
 
+    // Kiem tra va chuan hoa danh sach kinh nghiem lam viec va thong tin cap tren cu
+    const rawWork = req.body?.workExperience;
+    if (!Array.isArray(rawWork) || rawWork.length === 0) {
+      return res.status(400).json({ message: 'At least one work experience entry is required' });
+    }
+    if (rawWork.length > 10) {
+      return res.status(400).json({ message: 'Maximum 10 work experience items allowed' });
+    }
+
+    const workExperience = [];
+    for (const item of rawWork) {
+      const organization = typeof item?.organization === 'string' ? item.organization.trim() : '';
+      const position = typeof item?.position === 'string' ? item.position.trim() : '';
+      const startDate = typeof item?.startDate === 'string' ? item.startDate.trim() : '';
+      const endDate =
+        typeof item?.endDate === 'string' && item.endDate.trim() ? item.endDate.trim() : 'Present';
+      const supName =
+        typeof item?.supervisor?.name === 'string'
+          ? item.supervisor.name.trim()
+          : typeof item?.supervisorName === 'string'
+            ? item.supervisorName.trim()
+            : '';
+      const supContact =
+        typeof item?.supervisor?.contact === 'string'
+          ? item.supervisor.contact.trim()
+          : typeof item?.supervisorContact === 'string'
+            ? item.supervisorContact.trim()
+            : '';
+
+      if (!organization || !position || !startDate || !supName || !supContact) {
+        return res.status(400).json({
+          message:
+            'Each work experience must include organization, position, startDate, supervisor name, and supervisor contact',
+        });
+      }
+
+      workExperience.push({
+        organization,
+        position,
+        startDate,
+        endDate,
+        supervisor: {
+          name: supName,
+          contact: supContact,
+        },
+      });
+    }
+
+    // Kiem tra va chuan hoa danh sach chung chi kem tep anh da tai len
+    const rawCerts = req.body?.certificates;
+    if (rawCerts !== undefined && !Array.isArray(rawCerts)) {
+      return res.status(400).json({ message: 'Certificates must be an array' });
+    }
+    const certList = Array.isArray(rawCerts) ? rawCerts : [];
+    if (certList.length > 10) {
+      return res.status(400).json({ message: 'Maximum 10 certificates allowed' });
+    }
+
+    const certificates = [];
+    for (const cert of certList) {
+      const certName = typeof cert?.name === 'string' ? cert.name.trim() : '';
+      const imageUrl = typeof cert?.imageUrl === 'string' ? cert.imageUrl.trim() : '';
+      if (!certName || !imageUrl.startsWith('/api/media/certificates/')) {
+        return res.status(400).json({
+          message: 'Each certificate must include a name and a valid uploaded certificate image',
+        });
+      }
+      const filename = path.basename(imageUrl);
+      const filePath = path.join(CERTIFICATES_DIR, filename);
+      if (!filename || !fs.existsSync(filePath)) {
+        return res.status(400).json({ message: 'Uploaded certificate image file not found on server' });
+      }
+      certificates.push({
+        name: certName,
+        imageUrl: `/api/media/certificates/${filename}`,
+      });
+    }
+
     const application = await Instructor.create({
       user: req.auth.id,
       occupation,
       introduction,
       address,
+      workExperience,
+      certificates,
       isApproved: false,
     });
 
