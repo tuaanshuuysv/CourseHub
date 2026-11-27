@@ -8,6 +8,7 @@ import Student from '../models/Student.js';
 import Instructor from '../models/Instructor.js';
 import Course from '../models/Course.js';
 import LearningStreak from '../models/LearningStreak.js';
+import Wishlist from '../models/Wishlist.js';
 import { authenticate, requireRole, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
 import { AVATARS_DIR, uploadAvatar } from '../middleware/upload.js';
 
@@ -227,6 +228,24 @@ router.post('/become-instructor', requireRole('student'), async (req, res, next)
       message: 'Registration successful. Waiting for Admin approval.',
       application,
     });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-3.2 Lay danh sach khoa hoc yeu thich cua hoc vien tu collection Wishlist
+router.get('/wishlist', async (req, res, next) => {
+  try {
+    const items = await Wishlist.find({ userId: req.auth.id })
+      .sort({ addedAt: -1 })
+      .populate({
+        path: 'courseId',
+        match: { isDeleted: false },
+        select: '-curriculum',
+        populate: { path: 'category', select: 'name slug color' },
+      });
+
+    return res.json(items.map((w) => w.courseId).filter(Boolean));
   } catch (err) {
     return next(err);
   }
