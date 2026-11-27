@@ -1,12 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
+import Course from '../models/Course.js';
 import DraftVideo from '../models/DraftVideo.js';
+import Instructor from '../models/Instructor.js';
+import Order from '../models/Order.js';
 import { authenticate, requireInstructor } from '../middleware/auth.js';
 import { VIDEOS_DIR, uploadThumbnail, uploadVideo } from '../middleware/upload.js';
 
 const router = express.Router();
 const DRAFT_VIDEO_TTL_MS = 24 * 60 * 60 * 1000;
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // Tat ca tuyen API giang vien deu yeu cau dang nhap dung vai tro instructor
 router.use(authenticate, requireInstructor);
@@ -48,6 +52,71 @@ router.post('/videos/upload', uploadVideo.single('video'), async (req, res, next
       const filePath = path.join(VIDEOS_DIR, req.file.filename);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
+    return next(err);
+  }
+});
+
+// UC-4.5 & UC-4.11 Lay thong ke tong quan va doanh thu 12 thang cua giang vien (thuc nhan 80%)
+router.get('/dashboard', async (req, res, next) => {
+  try {
+    const [ownedCourses, instructorDoc] = await Promise.all([
+      Course.find({ 'instructor.ref': req.auth.id, isDeleted: false })
+        .select('-curriculum')
+        .populate('category', 'name slug color')
+        .sort({ createdAt: -1 }),
+      Instructor.findOne({ user: req.auth.id }),
+    ]);
+
+    const courseIds = ownedCourses.map((c) => c._id);
+    const ownedIdSet = new Set(courseIds.map((id) => String(id)));
+
+    const orders =
+      courseIds.length > 0
+        ? await Order.find({ status: 'completed', 'courses.course': { $in: courseIds } }).select(
+            'courses createdAt'
+          )
+        : [];
+
+    const monthly = Array(12).fill(0);
+    let totalRevenue = 0;
+
+    for (const ord of orders) {
+      const monthIdx = new Date(ord.createdAt).getMonth();
+      for (const item of ord.courses || []) {
+        if (ownedIdSet.has(String(item.course))) {
+          const net = Number((Number(item.pricePaid || 0) * 0.8).toFixed(2));
+          monthly[monthIdx] = Number((monthly[monthIdx] + net).toFixed(2));
+          totalRevenue = Number((totalRevenue + net).toFixed(2));
+        }
+      }
+    }
+
+    // Chi tinh diem trung binh tren cac khoa hoc da co danh gia that (tranh ep mac dinh 5.0)
+    const ratedCourses = ownedCourses.filter((c) => (c.rating?.count || 0) > 0);
+    const averageRating =
+      ratedCourses.length > 0
+        ? Number(
+            (
+              ratedCourses.reduce((sum, c) => sum + Number(c.rating?.average || 0), 0) /
+              ratedCourses.length
+            ).toFixed(1)
+          )
+        : 0;
+
+    return res.json({
+      courses: ownedCourses,
+      stats: {
+        totalCourses: ownedCourses.length,
+        liveCourses: ownedCourses.filter((c) => c.status === 'Live').length,
+        pendingCourses: ownedCourses.filter((c) => c.status === 'Pending').length,
+        totalStudents: ownedCourses.reduce((sum, c) => sum + (c.studentsEnrolled || 0), 0),
+        totalRevenue,
+        averageRating,
+      },
+      monthlyRevenue: MONTH_LABELS.map((month, idx) => ({ month, amount: monthly[idx] })),
+      instructor: instructorDoc || null,
+    });
+  } catch (err) {
     return next(err);
   }
 });
