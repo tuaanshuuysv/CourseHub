@@ -1,13 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
+import bcrypt from 'bcryptjs';
 import Admin from '../models/Admin.js';
 import User from '../models/User.js';
 import Student from '../models/Student.js';
 import Instructor from '../models/Instructor.js';
 import Course from '../models/Course.js';
 import LearningStreak from '../models/LearningStreak.js';
-import { authenticate, requireStudent } from '../middleware/auth.js';
+import { authenticate, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
 import { AVATARS_DIR, uploadAvatar } from '../middleware/upload.js';
 
 const router = express.Router();
@@ -154,6 +155,45 @@ router.post('/profile/avatar', uploadAvatar.single('avatar'), async (req, res, n
       avatarUrl,
       user,
     });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Doi mat khau nguoi dung, vo hieu hoa token cu va cap lai JWT phien moi
+router.put('/change-password', async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+    if (String(newPassword) === String(currentPassword)) {
+      return res.status(400).json({ message: 'New password must be different from current password' });
+    }
+
+    // Select them truong password vi schema dang an mac dinh (select: false)
+    const user = await User.findById(req.auth.id).select('+password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const match = await bcrypt.compare(String(currentPassword), user.password);
+    if (!match) {
+      return res.status(400).json({ message: 'Incorrect current password' });
+    }
+
+    user.password = await bcrypt.hash(String(newPassword), 10);
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    // Cap lai JWT moi cho phien hien tai trong khi cac token cu bi vo hieu hoa
+    const token = signToken({ id: user._id.toString(), role: user.role });
+    setAuthCookie(res, token);
+
+    return res.json({ message: 'Password changed successfully!', token });
   } catch (err) {
     return next(err);
   }
