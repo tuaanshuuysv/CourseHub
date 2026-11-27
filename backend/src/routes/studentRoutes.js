@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import Admin from '../models/Admin.js';
 import User from '../models/User.js';
 import Student from '../models/Student.js';
@@ -246,6 +247,32 @@ router.get('/wishlist', async (req, res, next) => {
       });
 
     return res.json(items.map((w) => w.courseId).filter(Boolean));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-3.2 Them hoac go khoa hoc khoi danh sach yeu thich (chi luu tai collection Wishlist)
+router.post('/wishlist/toggle', async (req, res, next) => {
+  try {
+    const { courseId } = req.body || {};
+    if (!mongoose.isValidObjectId(courseId)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+
+    const course = await Course.findOne({ _id: courseId, isDeleted: false }).select('_id');
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const existing = await Wishlist.findOne({ userId: req.auth.id, courseId: course._id });
+    if (existing) {
+      await Wishlist.deleteOne({ _id: existing._id });
+      return res.json({ wished: false, message: 'Removed from wishlist' });
+    }
+
+    await Wishlist.create({ userId: req.auth.id, courseId: course._id });
+    return res.json({ wished: true, message: 'Added to wishlist' });
   } catch (err) {
     return next(err);
   }
