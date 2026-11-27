@@ -1,10 +1,14 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import Admin from '../models/Admin.js';
 import User from '../models/User.js';
 import Student from '../models/Student.js';
 import Instructor from '../models/Instructor.js';
+import Course from '../models/Course.js';
 import LearningStreak from '../models/LearningStreak.js';
 import { authenticate, requireStudent } from '../middleware/auth.js';
+import { AVATARS_DIR, uploadAvatar } from '../middleware/upload.js';
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -103,6 +107,52 @@ router.put('/profile', async (req, res, next) => {
       message: 'Profile updated successfully',
       user: updatedUser,
       student,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// UC-2.2 Tai len anh dai dien that cua nguoi dung va xoa tep anh cu (neu co)
+router.post('/profile/avatar', uploadAvatar.single('avatar'), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Avatar image file is required' });
+    }
+
+    const user = await User.findById(req.auth.id);
+    if (!user) {
+      const tempPath = path.join(AVATARS_DIR, req.file.filename);
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const previousAvatar = user.pfpImg || '';
+    const avatarUrl = `/api/media/avatars/${req.file.filename}`;
+    user.pfpImg = avatarUrl;
+    await user.save();
+
+    // Dong bo anh dai dien moi tren cac khoa hoc neu tai khoan la giang vien
+    if (user.role === 'instructor') {
+      await Course.updateMany(
+        { 'instructor.ref': user._id },
+        { $set: { 'instructor.avatar': avatarUrl } }
+      );
+    }
+
+    // Xoa tep anh dai dien cu tren dia neu truoc do da upload len he thong
+    if (previousAvatar.startsWith('/api/media/avatars/')) {
+      const oldFilename = path.basename(previousAvatar);
+      const oldPath = path.join(AVATARS_DIR, oldFilename);
+      if (oldFilename !== req.file.filename && fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+      }
+    }
+
+    return res.json({
+      message: 'Avatar uploaded successfully',
+      avatarUrl,
+      user,
     });
   } catch (err) {
     return next(err);
