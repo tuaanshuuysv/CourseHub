@@ -1,10 +1,44 @@
 import { useEffect, useRef, useState } from 'react';
-import { FaCamera, FaCheckCircle, FaClock, FaLock, FaUserTie } from 'react-icons/fa';
+import {
+  FaBriefcase,
+  FaCamera,
+  FaCertificate,
+  FaCheckCircle,
+  FaClock,
+  FaLock,
+  FaPlus,
+  FaTrash,
+  FaUpload,
+  FaUserTie,
+} from 'react-icons/fa';
 import WorkspaceLayout from '@/layouts/WorkspaceLayout';
 import { useCourseHub } from '@/context/CourseHubContext';
 import { api, setStoredToken } from '@/api/client';
 
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+// Khoi tao mot dong kinh nghiem lam viec trong moi
+function createEmptyExperience() {
+  return {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    organization: '',
+    position: '',
+    startDate: '',
+    endDate: '',
+    supervisorName: '',
+    supervisorContact: '',
+  };
+}
+
+// Khoi tao mot dong chung chi trong moi
+function createEmptyCertificate() {
+  return {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    name: '',
+    imageUrl: '',
+    uploading: false,
+  };
+}
 
 // Man hinh ho so ca nhan hoc vien: tai len anh dai dien, cap nhat thong tin, doi mat khau va dang ky giang vien
 export default function StudentProfilePage() {
@@ -30,10 +64,12 @@ export default function StudentProfilePage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Form dang ky tro thanh Giang vien (UC-3.1)
+  // Form dang ky tro thanh Giang vien kem kinh nghiem lam viec va chung chi (UC-3.1)
   const [instructorApp, setInstructorApp] = useState(null);
   const [occupation, setOccupation] = useState('');
   const [introduction, setIntroduction] = useState('');
+  const [workExperience, setWorkExperience] = useState([createEmptyExperience()]);
+  const [certificates, setCertificates] = useState([createEmptyCertificate()]);
 
   useEffect(() => {
     let active = true;
@@ -74,7 +110,7 @@ export default function StudentProfilePage() {
       notify('Please select a valid image file (JPG, PNG, WEBP, GIF)', 'danger');
       return;
     }
-    if (file.size > MAX_AVATAR_BYTES) {
+    if (file.size > MAX_IMAGE_BYTES) {
       notify('Avatar image must be 5MB or smaller', 'danger');
       return;
     }
@@ -145,20 +181,101 @@ export default function StudentProfilePage() {
     }
   };
 
+  // Cap nhat truong cua mot muc kinh nghiem lam viec
+  const updateExperienceField = (id, field, value) => {
+    setWorkExperience((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+  };
+
+  // Cap nhat ten cua mot chung chi
+  const updateCertificateName = (id, value) => {
+    setCertificates((prev) => prev.map((item) => (item.id === id ? { ...item, name: value } : item)));
+  };
+
+  // Tai len anh chup chung chi va hien thi xem truoc
+  const handleCertificateUpload = async (certId, e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      notify('Please select a valid image file (JPG, PNG, WEBP, GIF)', 'danger');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      notify('Certificate image must be 5MB or smaller', 'danger');
+      return;
+    }
+
+    setCertificates((prev) => prev.map((item) => (item.id === certId ? { ...item, uploading: true } : item)));
+    try {
+      const formData = new FormData();
+      formData.append('certificate', file);
+      const res = await api.upload('/api/student/become-instructor/certificate', formData);
+      setCertificates((prev) =>
+        prev.map((item) => (item.id === certId ? { ...item, imageUrl: res.imageUrl, uploading: false } : item))
+      );
+      notify(res.message || 'Certificate photo uploaded');
+    } catch (err) {
+      setCertificates((prev) => prev.map((item) => (item.id === certId ? { ...item, uploading: false } : item)));
+      notify(err.message, 'danger');
+    }
+  };
+
   // Gui don dang ky tro thanh Giang vien cho Admin phe duyet
   const handleBecomeInstructor = async (e) => {
     e.preventDefault();
+
+    const formattedWork = workExperience.map((item) => ({
+      organization: item.organization.trim(),
+      position: item.position.trim(),
+      startDate: item.startDate.trim(),
+      endDate: item.endDate.trim() || 'Present',
+      supervisor: {
+        name: item.supervisorName.trim(),
+        contact: item.supervisorContact.trim(),
+      },
+    }));
+
+    const hasIncompleteWork = formattedWork.some(
+      (item) =>
+        !item.organization ||
+        !item.position ||
+        !item.startDate ||
+        !item.supervisor.name ||
+        !item.supervisor.contact
+    );
+    if (formattedWork.length === 0 || hasIncompleteWork) {
+      notify('Please fill in all required work experience and former supervisor fields', 'danger');
+      return;
+    }
+
+    // Bo qua dong chung chi hoan toan trong; neu co ten hoac anh thi yeu cau day du ca hai
+    const nonEmptyCerts = certificates.filter((c) => c.name.trim() || c.imageUrl);
+    if (nonEmptyCerts.some((c) => !c.name.trim() || !c.imageUrl)) {
+      notify('Each certificate must include both a name and an uploaded photo', 'danger');
+      return;
+    }
+
+    const formattedCerts = nonEmptyCerts.map((c) => ({
+      name: c.name.trim(),
+      imageUrl: c.imageUrl,
+    }));
+
     setSubmittingApplication(true);
     try {
       const res = await api.post('/api/student/become-instructor', {
         occupation: occupation.trim(),
         introduction: introduction.trim(),
         address: address.trim(),
+        workExperience: formattedWork,
+        certificates: formattedCerts,
       });
       setInstructorApp({
         isApproved: false,
         occupation: res.application?.occupation || occupation.trim(),
         introduction: res.application?.introduction || introduction.trim(),
+        workExperience: res.application?.workExperience || formattedWork,
+        certificates: res.application?.certificates || formattedCerts,
       });
       notify(res.message);
     } catch (err) {
@@ -391,17 +508,95 @@ export default function StudentProfilePage() {
                   Your account already has Instructor privileges to create and manage courses.
                 </p>
               ) : instructorApp ? (
-                <div style={{ padding: 14, borderRadius: 12, background: 'var(--bg-canvas)', border: '1px solid var(--border)' }}>
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>Your application is under review</div>
-                  <div style={{ fontSize: '0.88rem', color: 'var(--ink-secondary)', marginBottom: 4 }}>
-                    <strong>Occupation:</strong> {instructorApp.occupation}
+                <div
+                  style={{
+                    padding: 16,
+                    borderRadius: 12,
+                    background: 'var(--bg-canvas)',
+                    border: '1px solid var(--border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Your application is under review</div>
+                    <div style={{ fontSize: '0.88rem', color: 'var(--ink-secondary)', marginBottom: 4 }}>
+                      <strong>Occupation:</strong> {instructorApp.occupation}
+                    </div>
+                    <div style={{ fontSize: '0.88rem', color: 'var(--ink-secondary)' }}>
+                      <strong>Introduction:</strong> {instructorApp.introduction}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.88rem', color: 'var(--ink-secondary)' }}>
-                    <strong>Introduction:</strong> {instructorApp.introduction}
-                  </div>
+
+                  {(instructorApp.workExperience || []).length > 0 && (
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 8 }}>
+                        Work Experience ({instructorApp.workExperience.length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {instructorApp.workExperience.map((exp, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              padding: 10,
+                              borderRadius: 10,
+                              background: 'var(--bg-surface)',
+                              border: '1px solid var(--border)',
+                              fontSize: '0.84rem',
+                            }}
+                          >
+                            <div style={{ fontWeight: 700 }}>
+                              {exp.position} - {exp.organization}
+                            </div>
+                            <div style={{ color: 'var(--ink-muted)', marginTop: 2 }}>
+                              Period: {exp.startDate} to {exp.endDate || 'Present'}
+                            </div>
+                            <div style={{ color: 'var(--ink-secondary)', marginTop: 2 }}>
+                              Reference Supervisor: <strong>{exp.supervisor?.name}</strong> ({exp.supervisor?.contact})
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(instructorApp.certificates || []).length > 0 && (
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 8 }}>
+                        Uploaded Certificates ({instructorApp.certificates.length})
+                      </div>
+                      <div className="ch-grid-2">
+                        {instructorApp.certificates.map((cert, idx) => (
+                          <a
+                            key={idx}
+                            href={cert.imageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              padding: 8,
+                              borderRadius: 10,
+                              background: 'var(--bg-surface)',
+                              border: '1px solid var(--border)',
+                            }}
+                          >
+                            <img
+                              src={cert.imageUrl}
+                              alt={cert.name}
+                              style={{ width: 54, height: 42, objectFit: 'cover', borderRadius: 6 }}
+                            />
+                            <span style={{ fontSize: '0.84rem', fontWeight: 600 }}>{cert.name}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <form onSubmit={handleBecomeInstructor} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <form onSubmit={handleBecomeInstructor} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div className="ch-field">
                     <label className="ch-label">Current Occupation / Specialty</label>
                     <input
@@ -423,8 +618,238 @@ export default function StudentProfilePage() {
                       required
                     />
                   </div>
+
+                  {/* Phan khai bao kinh nghiem lam viec va cap tren cu de xac minh */}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <strong style={{ fontSize: '0.94rem', display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                        <FaBriefcase style={{ color: 'var(--teal)' }} /> Work Experience & Reference Supervisor
+                      </strong>
+                      {workExperience.length < 10 && (
+                        <button
+                          type="button"
+                          onClick={() => setWorkExperience((prev) => [...prev, createEmptyExperience()])}
+                          className="ch-btn ch-btn--sm ch-btn--outline"
+                        >
+                          <FaPlus size={10} /> Add Experience
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {workExperience.map((exp, idx) => (
+                        <div
+                          key={exp.id}
+                          style={{
+                            padding: 14,
+                            borderRadius: 12,
+                            background: 'var(--bg-canvas)',
+                            border: '1px solid var(--border)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 10,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink-secondary)' }}>
+                              Experience #{idx + 1}
+                            </span>
+                            {workExperience.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setWorkExperience((prev) => prev.filter((item) => item.id !== exp.id))}
+                                className="ch-btn ch-btn--sm ch-btn--danger-soft"
+                              >
+                                <FaTrash size={10} /> Remove
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="ch-grid-2">
+                            <div className="ch-field">
+                              <label className="ch-label">Organization / Company</label>
+                              <input
+                                className="ch-input"
+                                value={exp.organization}
+                                onChange={(e) => updateExperienceField(exp.id, 'organization', e.target.value)}
+                                placeholder="e.g. FPT Software"
+                                required
+                              />
+                            </div>
+                            <div className="ch-field">
+                              <label className="ch-label">Position / Title</label>
+                              <input
+                                className="ch-input"
+                                value={exp.position}
+                                onChange={(e) => updateExperienceField(exp.id, 'position', e.target.value)}
+                                placeholder="e.g. Tech Lead"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          <div className="ch-grid-2">
+                            <div className="ch-field">
+                              <label className="ch-label">Start Date</label>
+                              <input
+                                className="ch-input"
+                                value={exp.startDate}
+                                onChange={(e) => updateExperienceField(exp.id, 'startDate', e.target.value)}
+                                placeholder="e.g. 03/2021"
+                                required
+                              />
+                            </div>
+                            <div className="ch-field">
+                              <label className="ch-label">End Date (or Present)</label>
+                              <input
+                                className="ch-input"
+                                value={exp.endDate}
+                                onChange={(e) => updateExperienceField(exp.id, 'endDate', e.target.value)}
+                                placeholder="e.g. Present or 12/2024"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="ch-grid-2">
+                            <div className="ch-field">
+                              <label className="ch-label">Former Supervisor Name</label>
+                              <input
+                                className="ch-input"
+                                value={exp.supervisorName}
+                                onChange={(e) => updateExperienceField(exp.id, 'supervisorName', e.target.value)}
+                                placeholder="e.g. Tran Quoc Minh"
+                                required
+                              />
+                            </div>
+                            <div className="ch-field">
+                              <label className="ch-label">Supervisor Contact (Email / Phone)</label>
+                              <input
+                                className="ch-input"
+                                value={exp.supervisorContact}
+                                onChange={(e) => updateExperienceField(exp.id, 'supervisorContact', e.target.value)}
+                                placeholder="e.g. manager@company.com / 0909..."
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Phan khai bao chung chi va tai len anh chup chung chi */}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <strong style={{ fontSize: '0.94rem', display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                        <FaCertificate style={{ color: 'var(--coral)' }} /> Certificates & Photo Proof
+                      </strong>
+                      {certificates.length < 10 && (
+                        <button
+                          type="button"
+                          onClick={() => setCertificates((prev) => [...prev, createEmptyCertificate()])}
+                          className="ch-btn ch-btn--sm ch-btn--outline"
+                        >
+                          <FaPlus size={10} /> Add Certificate
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {certificates.map((cert, idx) => (
+                        <div
+                          key={cert.id}
+                          style={{
+                            padding: 14,
+                            borderRadius: 12,
+                            background: 'var(--bg-canvas)',
+                            border: '1px solid var(--border)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 10,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink-secondary)' }}>
+                              Certificate #{idx + 1}
+                            </span>
+                            {certificates.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setCertificates((prev) => prev.filter((item) => item.id !== cert.id))}
+                                className="ch-btn ch-btn--sm ch-btn--danger-soft"
+                              >
+                                <FaTrash size={10} /> Remove
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="ch-grid-2" style={{ alignItems: 'end' }}>
+                            <div className="ch-field">
+                              <label className="ch-label">Certificate Name</label>
+                              <input
+                                className="ch-input"
+                                value={cert.name}
+                                onChange={(e) => updateCertificateName(cert.id, e.target.value)}
+                                placeholder="e.g. AWS Certified Solutions Architect"
+                              />
+                            </div>
+                            <div className="ch-field">
+                              <label className="ch-label">Certificate Photo (JPG/PNG/WEBP, max 5MB)</label>
+                              <label
+                                className="ch-btn ch-btn--sm ch-btn--outline"
+                                style={{ cursor: cert.uploading ? 'wait' : 'pointer', justifyContent: 'center' }}
+                              >
+                                <FaUpload size={11} />{' '}
+                                {cert.uploading
+                                  ? 'Uploading...'
+                                  : cert.imageUrl
+                                    ? 'Replace Certificate Photo'
+                                    : 'Upload Certificate Photo'}
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp,image/gif"
+                                  disabled={cert.uploading}
+                                  onChange={(e) => handleCertificateUpload(cert.id, e)}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
+                            </div>
+                          </div>
+
+                          {cert.imageUrl && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <img
+                                src={cert.imageUrl}
+                                alt={cert.name || 'Certificate preview'}
+                                style={{
+                                  width: 84,
+                                  height: 58,
+                                  objectFit: 'cover',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--border)',
+                                }}
+                              />
+                              <a
+                                href={cert.imageUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ fontSize: '0.82rem', color: 'var(--teal)', fontWeight: 700 }}
+                              >
+                                View uploaded certificate photo
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
-                    <button type="submit" disabled={submittingApplication} className="ch-btn ch-btn--coral">
+                    <button
+                      type="submit"
+                      disabled={submittingApplication || certificates.some((c) => c.uploading)}
+                      className="ch-btn ch-btn--coral"
+                    >
                       {submittingApplication ? 'Submitting...' : 'Submit Instructor Application'}
                     </button>
                   </div>
