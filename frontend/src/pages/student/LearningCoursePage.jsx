@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
+  FaArrowLeft,
   FaBookOpen,
   FaCheck,
   FaCheckCircle,
+  FaPlay,
   FaPlayCircle,
   FaQuestionCircle,
   FaRegCircle,
@@ -13,16 +15,18 @@ import WorkspaceLayout from '@/layouts/WorkspaceLayout';
 import { useCourseHub } from '@/context/CourseHubContext';
 import { api } from '@/api/client';
 
-// Man hinh phong hoc truc tuyen gom trinh phat video, tien do bai giang, trac nghiem va danh gia (UC-3.6 -> UC-3.10)
+// Man hinh phong hoc truc tuyen: chon khoa hoc da ghi danh truoc khi vao hoc video, quiz va danh gia
 export default function LearningCoursePage() {
   const { id } = useParams();
-  const { enrolledIds, setStreak, notify } = useCourseHub();
-  const targetId = id || enrolledIds[0] || '';
+  const { setStreak, notify } = useCourseHub();
+  const targetId = id || '';
 
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
+  const [loadingList, setLoadingList] = useState(!targetId);
   const [course, setCourse] = useState(null);
   const [progress, setProgress] = useState(null);
   const [activeLesson, setActiveLesson] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(targetId));
   const [loadError, setLoadError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
   const [note, setNote] = useState('');
@@ -42,7 +46,29 @@ export default function LearningCoursePage() {
   const videoRef = useRef(null);
   const lastSavedTimeRef = useRef(0);
 
-  // Tai du lieu phong hoc cua khoa hoc da ghi danh
+  // Tai danh sach khoa hoc da ghi danh khi hoc vien mo tab Learning Studio ma chua chon khoa hoc
+  useEffect(() => {
+    if (targetId) return;
+    let active = true;
+    (async () => {
+      setLoadingList(true);
+      try {
+        const res = await api.get('/api/student/my-courses');
+        if (!active) return;
+        setEnrolledCourses(res?.courses || []);
+        if (res?.streak) setStreak(res.streak);
+      } catch (err) {
+        if (active) notify(err.message, 'danger');
+      } finally {
+        if (active) setLoadingList(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [targetId, setStreak, notify]);
+
+  // Tai du lieu phong hoc cua khoa hoc da chon
   useEffect(() => {
     if (!targetId) {
       setCourse(null);
@@ -107,28 +133,88 @@ export default function LearningCoursePage() {
     return (progress?.lectures || []).find((l) => String(l.lectureId) === String(activeLesson._id)) || null;
   }, [progress, activeLesson]);
 
+  // Hien thi man hinh chon khoa hoc truoc khi vao phong hoc neu chua co ma khoa hoc trong URL
+  if (!targetId) {
+    return (
+      <WorkspaceLayout
+        variant="student"
+        title="Learning Studio"
+        subtitle="Select one of your enrolled courses to open the video classroom and quizzes."
+      >
+        {loadingList ? (
+          <div className="ch-card ch-card--pad" style={{ textAlign: 'center', padding: 48, color: 'var(--ink-muted)' }}>
+            Loading your enrolled courses...
+          </div>
+        ) : enrolledCourses.length === 0 ? (
+          <div className="ch-card ch-card--pad" style={{ textAlign: 'center', padding: 48 }}>
+            <FaBookOpen size={36} style={{ color: 'var(--teal)', marginBottom: 12 }} />
+            <h3>No enrolled courses yet</h3>
+            <p style={{ color: 'var(--ink-muted)', marginBottom: 16 }}>
+              Enroll in a course from the catalog to unlock videos, quizzes, and progress tracking.
+            </p>
+            <Link to="/student/courses" className="ch-btn ch-btn--primary">
+              Browse Courses
+            </Link>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <h2 style={{ fontSize: '1.18rem', fontWeight: 800, margin: 0 }}>Choose a Course to Study</h2>
+                <p style={{ margin: '4px 0 0', fontSize: '0.86rem', color: 'var(--ink-muted)' }}>
+                  Pick any enrolled course below to resume from your last watched lecture.
+                </p>
+              </div>
+              <span className="ch-badge ch-badge--teal">{enrolledCourses.length} Enrolled</span>
+            </div>
+
+            <div className="ch-grid-3">
+              {enrolledCourses.map((c) => {
+                const percent = c.progress?.percent ?? 0;
+                const completed = c.progress?.completedLecturesCount ?? 0;
+                const total = c.progress?.totalLectures ?? c.lecturesCount ?? 0;
+                return (
+                  <div key={c._id} className="ch-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <img
+                      src={c.thumbnail || '/media/courses/01.jpg'}
+                      alt={c.title}
+                      style={{ width: '100%', height: 156, objectFit: 'cover' }}
+                    />
+                    <div className="ch-card--pad" style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <span className="ch-badge ch-badge--teal">{c.category?.name || 'Course'}</span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal-dark)' }}>{percent}%</span>
+                      </div>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, lineHeight: 1.35 }}>{c.title}</h3>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
+                        By {c.instructor?.name || 'Educator'} | {completed}/{total} lessons
+                      </div>
+                      <div className="ch-progress" style={{ marginTop: 'auto' }}>
+                        <div className="ch-progress__bar" style={{ width: `${percent}%` }} />
+                      </div>
+                      <Link
+                        to={`/student/learning/${c._id}`}
+                        className="ch-btn ch-btn--sm ch-btn--primary"
+                        style={{ justifyContent: 'center', marginTop: 4 }}
+                      >
+                        <FaPlay size={10} /> {percent > 0 ? 'Continue Learning' : 'Start Learning'}
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </WorkspaceLayout>
+    );
+  }
+
   if (loading) {
     return (
       <WorkspaceLayout variant="student" title="Learning Studio" subtitle="Loading your classroom...">
         <div className="ch-card ch-card--pad" style={{ textAlign: 'center', padding: 48, color: 'var(--ink-muted)' }}>
           Loading video studio...
-        </div>
-      </WorkspaceLayout>
-    );
-  }
-
-  if (!targetId) {
-    return (
-      <WorkspaceLayout variant="student" title="Learning Studio" subtitle="Select an enrolled course to start watching">
-        <div className="ch-card ch-card--pad" style={{ textAlign: 'center', padding: 48 }}>
-          <FaBookOpen size={36} style={{ color: 'var(--teal)', marginBottom: 12 }} />
-          <h3>No enrolled courses yet</h3>
-          <p style={{ color: 'var(--ink-muted)', marginBottom: 16 }}>
-            Enroll in a course from the catalog to unlock videos, quizzes, and progress tracking.
-          </p>
-          <Link to="/student/courses" className="ch-btn ch-btn--primary">
-            Browse Courses
-          </Link>
         </div>
       </WorkspaceLayout>
     );
@@ -267,6 +353,11 @@ export default function LearningCoursePage() {
       variant="student"
       title={course.title}
       subtitle={`Learning Studio | ${completedIds.length}/${allLessons.length} lessons completed (${pct}%)`}
+      actions={
+        <Link to="/student/learning" className="ch-btn ch-btn--sm ch-btn--outline">
+          <FaArrowLeft size={11} /> Switch Course
+        </Link>
+      }
     >
       <div className="ch-learning-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
