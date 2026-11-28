@@ -595,4 +595,46 @@ router.get('/instructor-requests', async (_req, res, next) => {
   }
 });
 
+// Xet duyet (accept) hoac tu choi (reject) don dang ky giang vien va don tep chung chi neu tu choi
+router.patch('/instructor-requests/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid requestId' });
+    }
+    const action = typeof req.body?.action === 'string' ? req.body.action.trim() : '';
+    if (!['accept', 'reject'].includes(action)) {
+      return res.status(400).json({ message: 'Action must be accept or reject' });
+    }
+
+    const appDoc = await Instructor.findOne({ _id: req.params.id, isApproved: false });
+    if (!appDoc) {
+      return res.status(404).json({ message: 'Pending instructor request not found' });
+    }
+
+    if (action === 'accept') {
+      appDoc.isApproved = true;
+      await appDoc.save();
+      await User.findByIdAndUpdate(appDoc.user, { role: 'instructor' });
+      return res.json({ message: 'Instructor request accepted successfully' });
+    }
+
+    // Xoa cac anh chung chi nguoi dung da tai len tren dia khi tu choi don (khong dung vao tep mau tinh)
+    for (const cert of appDoc.certificates || []) {
+      const url = typeof cert?.imageUrl === 'string' ? cert.imageUrl : '';
+      if (url.startsWith('/api/media/certificates/')) {
+        const filename = path.basename(url);
+        const filePath = path.join(CERTIFICATES_DIR, filename);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    }
+
+    await Instructor.deleteOne({ _id: appDoc._id });
+    return res.json({ message: 'Instructor request rejected' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
