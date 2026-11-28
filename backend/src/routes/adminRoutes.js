@@ -735,4 +735,43 @@ router.delete('/coupons/:id', async (req, res, next) => {
   }
 });
 
+// Doi mat khau tai khoan Quan tri vien, vo hieu hoa token cu va cap lai JWT phien moi
+router.put('/change-password', async (req, res, next) => {
+  try {
+    const oldPassword = req.body?.oldPassword ?? req.body?.currentPassword ?? '';
+    const newPassword = req.body?.newPassword ?? '';
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters long' });
+    }
+    if (String(newPassword) === String(oldPassword)) {
+      return res.status(400).json({ message: 'New password must be different from current password' });
+    }
+
+    const admin = await Admin.findById(req.auth.id).select('+password');
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin account not found' });
+    }
+
+    const ok = await bcrypt.compare(String(oldPassword), admin.password);
+    if (!ok) {
+      return res.status(400).json({ message: 'Incorrect current password' });
+    }
+
+    admin.password = await bcrypt.hash(String(newPassword), 10);
+    admin.passwordChangedAt = new Date();
+    await admin.save();
+
+    const token = signToken({ id: admin._id.toString(), role: 'admin' });
+    setAuthCookie(res, token);
+
+    return res.json({ message: 'Admin password changed successfully!', token });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
