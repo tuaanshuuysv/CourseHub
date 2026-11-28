@@ -1066,4 +1066,108 @@ router.post('/courses/:courseId/reviews', async (req, res, next) => {
   }
 });
 
+// Goi y khoa hoc ca nhan hoa dua tren danh muc (category) cua cac khoa hoc trong Wishlist cua hoc vien
+router.get('/recommendations', async (req, res, next) => {
+  try {
+    const [wishlistItems, student] = await Promise.all([
+      Wishlist.find({ userId: req.auth.id }).populate({
+        path: 'courseId',
+        match: { isDeleted: false },
+        select: '_id category',
+        populate: { path: 'category', select: 'name slug color' },
+      }),
+      Student.findOne({ user: req.auth.id }).select('myCourses'),
+    ]);
+
+    const validWishlistCourses = wishlistItems.map((item) => item.courseId).filter(Boolean);
+    if (validWishlistCourses.length === 0) {
+      return res.json({
+        courses: [],
+        basedOnCategories: [],
+        hasWishlist: false,
+      });
+    }
+
+    // Thong ke tan suat xuat hien cua tung danh muc trong Wishlist de uu tien goi y phu hop nhat
+    const categoryFreq = new Map();
+    const categoryMeta = new Map();
+    const excludedIds = new Set();
+
+    for (const course of validWishlistCourses) {
+      excludedIds.add(String(course._id));
+      const cat = course.category;
+      if (cat && cat._id) {
+        const key = String(cat._id);
+        categoryFreq.set(key, (categoryFreq.get(key) || 0) + 1);
+        if (!categoryMeta.has(key)) {
+          categoryMeta.set(key, {
+            _id: cat._id,
+            name: cat.name,
+            slug: cat.slug,
+            color: cat.color,
+          });
+        }
+      }
+    }
+
+    for (const enrolled of student?.myCourses || []) {
+      if (enrolled?.course) {
+        excludedIds.add(String(enrolled.course));
+      }
+    }
+
+    const sortedCategoryIds = [...categoryFreq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([id]) => new mongoose.Types.ObjectId(id));
+
+    if (sortedCategoryIds.length === 0) {
+      return res.json({
+        courses: [],
+        basedOnCategories: [],
+        hasWishlist: true,
+      });
+    }
+
+    const excludedObjectIds = [...excludedIds]
+      .filter((id) => mongoose.isValidObjectId(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    const candidates = await Course.find({
+      status: 'Live',
+      isDeleted: false,
+      isPrivate: false,
+      category: { $in: sortedCategoryIds },
+      _id: { $nin: excludedObjectIds },
+    })
+      .select('-curriculum')
+      .populate('category', 'name slug color')
+      .sort({ 'rating.average': -1, studentsEnrolled: -1, createdAt: -1 })
+      .limit(18);
+
+    // Sap xep uu tien theo so lan danh muc xuat hien trong Wishlist, sau do den danh gia va luot hoc
+    const ranked = [...candidates]
+      .sort((a, b) => {
+        const freqA = categoryFreq.get(String(a.category?._id)) || 0;
+        const freqB = categoryFreq.get(String(b.category?._id)) || 0;
+        if (freqB !== freqA) return freqB - freqA;
+        const ratingDiff = (b.rating?.average || 0) - (a.rating?.average || 0);
+        if (ratingDiff !== 0) return ratingDiff;
+        return (b.studentsEnrolled || 0) - (a.studentsEnrolled || 0);
+      })
+      .slice(0, 6);
+
+    const basedOnCategories = sortedCategoryIds
+      .map((id) => categoryMeta.get(String(id)))
+      .filter(Boolean);
+
+    return res.json({
+      courses: ranked,
+      basedOnCategories,
+      hasWishlist: true,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
