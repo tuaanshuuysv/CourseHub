@@ -7,6 +7,7 @@ import authRoutes from './routes/authRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
 import instructorRoutes from './routes/instructorRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 import mediaRoutes from './routes/mediaRoutes.js';
 import { startDraftVideoCleanupScheduler } from './services/draftVideoCleanup.js';
 
@@ -50,6 +51,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', publicRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/instructor', instructorRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/media', mediaRoutes);
 
 // Middleware bat loi 404 cho cac duong dan khong ton tai
