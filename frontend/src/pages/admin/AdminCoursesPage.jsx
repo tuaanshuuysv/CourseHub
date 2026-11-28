@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { FaBan, FaCheck, FaEye, FaSearch, FaTimes, FaUnlock } from 'react-icons/fa';
 import WorkspaceLayout from '@/layouts/WorkspaceLayout';
 import { useCourseHub } from '@/context/CourseHubContext';
@@ -24,15 +24,27 @@ function getStatusBadge(status) {
 
 // Man hinh kiem duyet va quan ly trang thai khoa hoc toan san
 export default function AdminCoursesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialStatus = searchParams.get('status') || 'All';
   const { notify, refreshPublicCatalog } = useCourseHub();
   const [courses, setCourses] = useState([]);
   const [statusCounts, setStatusCounts] = useState({});
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
+
+  const selectStatusFilter = (st) => {
+    setStatusFilter(st);
+    setPage(1);
+    if (st === 'All') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ status: st });
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,7 +98,12 @@ export default function AdminCoursesPage() {
           </div>
           <span className="ch-badge ch-badge--success">Live</span>
         </div>
-        <div className="ch-kpi">
+        <div
+          className="ch-kpi"
+          onClick={() => selectStatusFilter('Pending')}
+          style={{ cursor: 'pointer', borderColor: statusFilter === 'Pending' ? 'var(--amber)' : undefined }}
+          title="Filter all courses awaiting approval"
+        >
           <div>
             <div style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>Pending Approval</div>
             <div className="ch-kpi__val">{statusCounts.Pending || 0}</div>
@@ -125,19 +142,22 @@ export default function AdminCoursesPage() {
             />
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {['All', 'Pending', 'Live', 'Draft', 'Rejected', 'Blocked'].map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => {
-                  setStatusFilter(st);
-                  setPage(1);
-                }}
-                className={`ch-btn ch-btn--sm ${statusFilter === st ? 'ch-btn--dark' : 'ch-btn--outline'}`}
-              >
-                {st}
-              </button>
-            ))}
+            {['All', 'Pending', 'Live', 'Draft', 'Rejected', 'Blocked'].map((st) => {
+              const count =
+                st === 'All'
+                  ? Object.values(statusCounts).reduce((sum, n) => sum + Number(n || 0), 0)
+                  : statusCounts[st] || 0;
+              return (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => selectStatusFilter(st)}
+                  className={`ch-btn ch-btn--sm ${statusFilter === st ? 'ch-btn--dark' : 'ch-btn--outline'}`}
+                >
+                  {st} ({count})
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -176,7 +196,9 @@ export default function AdminCoursesPage() {
                               style={{ width: 62, height: 42, objectFit: 'cover', borderRadius: 8 }}
                             />
                             <div>
-                              <strong>{c.title}</strong>
+                              <Link to={`/admin/courses/${c._id}`} style={{ fontWeight: 700, color: 'var(--ink)' }}>
+                                {c.title}
+                              </Link>
                               <div style={{ fontSize: '0.76rem', color: 'var(--ink-muted)' }}>
                                 {c.lecturesCount || 0} lessons | {c.level}
                               </div>
@@ -197,11 +219,11 @@ export default function AdminCoursesPage() {
                         <td>
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <Link
-                              to={`/courses/${c._id}`}
+                              to={`/admin/courses/${c._id}`}
                               className="ch-btn ch-btn--sm ch-btn--outline"
-                              title="Inspect course syllabus"
+                              title="Review full course videos and quizzes"
                             >
-                              <FaEye />
+                              <FaEye /> Review
                             </Link>
                             {c.status === 'Pending' && (
                               <>

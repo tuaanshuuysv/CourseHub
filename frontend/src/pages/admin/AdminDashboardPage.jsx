@@ -162,7 +162,7 @@ export default function AdminDashboardPage() {
         </Link>
 
         <Link
-          to="/admin/courses"
+          to="/admin/courses?status=Pending"
           className="ch-card ch-card--pad"
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
         >

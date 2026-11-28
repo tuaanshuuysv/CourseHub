@@ -24,6 +24,7 @@ import EducatorProfilePage from '@/pages/educator/EducatorProfilePage';
 import EducatorSettingsPage from '@/pages/educator/EducatorSettingsPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import AdminCoursesPage from '@/pages/admin/AdminCoursesPage';
+import AdminCourseDetailsPage from '@/pages/admin/AdminCourseDetailsPage';
 import AdminCategoriesPage from '@/pages/admin/AdminCategoriesPage';
 import AdminCouponsPage from '@/pages/admin/AdminCouponsPage';
 import AdminStudentsPage from '@/pages/admin/AdminStudentsPage';
@@ -229,6 +230,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminCoursesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/courses/:id"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminCourseDetailsPage />
             </ProtectedRoute>
           }
         />
