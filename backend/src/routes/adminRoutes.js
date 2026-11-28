@@ -651,4 +651,48 @@ router.get('/coupons', async (req, res, next) => {
   }
 });
 
+// Tao ma giam gia moi voi kiem tra phan tram giam (1-100) va khoang thoi gian hieu luc
+router.post('/coupons', async (req, res, next) => {
+  try {
+    const code = typeof req.body?.code === 'string' ? req.body.code.trim().toUpperCase() : '';
+    const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
+    const discountPercent = Number(req.body?.discountPercent);
+
+    if (!code) {
+      return res.status(400).json({ message: 'Coupon code is required' });
+    }
+    if (!Number.isFinite(discountPercent) || discountPercent < 1 || discountPercent > 100) {
+      return res.status(400).json({ message: 'discountPercent must be between 1 and 100' });
+    }
+
+    const startDate = req.body?.startDate ? new Date(req.body.startDate) : new Date();
+    const expiryDate = req.body?.expiryDate
+      ? new Date(req.body.expiryDate)
+      : new Date(Date.now() + 90 * 86400000);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(expiryDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid startDate or expiryDate' });
+    }
+    if (expiryDate <= startDate) {
+      return res.status(400).json({ message: 'expiryDate must be later than startDate' });
+    }
+
+    const exists = await Coupon.findOne({ code });
+    if (exists) {
+      return res.status(409).json({ message: 'Coupon code already exists' });
+    }
+
+    const coupon = await Coupon.create({
+      code,
+      description,
+      discountPercent,
+      startDate,
+      expiryDate,
+      isActive: true,
+    });
+    return res.status(201).json({ message: 'Coupon created successfully', coupon });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
