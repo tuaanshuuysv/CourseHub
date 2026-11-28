@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
+  FaBookOpen,
+  FaBriefcase,
+  FaCertificate,
   FaCheck,
+  FaCheckCircle,
   FaChevronDown,
   FaClock,
+  FaGlobe,
+  FaGraduationCap,
   FaHeart,
   FaLock,
+  FaMapMarkerAlt,
   FaPlayCircle,
   FaRegHeart,
   FaShoppingBag,
@@ -25,6 +32,7 @@ export default function CourseDetailsPage({ insideStudent = false }) {
   const targetId = id || courses[0]?._id;
   const [course, setCourse] = useState(null);
   const [reviews, setReviews] = useState([]);
+  const [instructorProfile, setInstructorProfile] = useState(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -50,6 +58,7 @@ export default function CourseDetailsPage({ insideStudent = false }) {
         if (!active) return;
         setCourse(res.course);
         setReviews(res.reviews || []);
+        setInstructorProfile(res.instructorProfile || null);
         setIsEnrolled(Boolean(res.isEnrolled));
       } catch (err) {
         if (!active) return;
@@ -154,14 +163,17 @@ export default function CourseDetailsPage({ insideStudent = false }) {
         <h1 style={{ color: '#fff', fontSize: 'clamp(1.6rem, 2.8vw, 2.25rem)', maxWidth: 820 }}>{course.title}</h1>
         <p style={{ color: '#d4d4d8', maxWidth: 740, marginTop: 10 }}>{course.subtitle}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 18, flexWrap: 'wrap', fontSize: '0.88rem' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <a
+            href="#instructor-info"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#fff' }}
+          >
             <img
-              src={course.instructor?.avatar || '/media/avatar/01.jpg'}
-              alt={course.instructor?.name || 'Instructor'}
+              src={instructorProfile?.avatar || course.instructor?.avatar || '/media/avatar/01.jpg'}
+              alt={instructorProfile?.name || course.instructor?.name || 'Instructor'}
               style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover' }}
             />
-            <strong>{course.instructor?.name || 'Instructor'}</strong>
-          </span>
+            <strong>{instructorProfile?.name || course.instructor?.name || 'Instructor'}</strong>
+          </a>
           <span>
             <FaStar style={{ color: '#fbbf24', verticalAlign: '-2px' }} /> {ratingLabel} ({ratingCount} reviews)
           </span>
@@ -276,6 +288,190 @@ export default function CourseDetailsPage({ insideStudent = false }) {
               })}
             </div>
           </div>
+
+          {instructorProfile && (
+            <div id="instructor-info" className="ch-card ch-card--pad">
+              <h2 style={{ fontSize: '1.25rem', marginBottom: 16 }}>About the Instructor</h2>
+
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 16 }}>
+                <img
+                  src={instructorProfile.avatar || '/media/avatar/01.jpg'}
+                  alt={instructorProfile.name}
+                  style={{
+                    width: 74,
+                    height: 74,
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '3px solid var(--teal-soft)',
+                    flexShrink: 0,
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.12rem', fontWeight: 800 }}>{instructorProfile.name}</h3>
+                    {instructorProfile.isApproved && (
+                      <span className="ch-badge ch-badge--teal">
+                        <FaCheckCircle size={11} /> Verified Educator
+                      </span>
+                    )}
+                  </div>
+                  {instructorProfile.occupation && (
+                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--teal-dark)', marginTop: 4 }}>
+                      {instructorProfile.occupation}
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 14,
+                      fontSize: '0.82rem',
+                      color: 'var(--ink-muted)',
+                      marginTop: 8,
+                    }}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <FaBookOpen style={{ color: 'var(--teal)' }} />{' '}
+                      <strong>{instructorProfile.stats?.liveCoursesCount ?? 0}</strong> Live Courses
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <FaUsers style={{ color: 'var(--indigo)' }} />{' '}
+                      <strong>{(instructorProfile.stats?.studentsCount ?? 0).toLocaleString()}</strong> Students
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <FaStar style={{ color: '#f59e0b' }} />{' '}
+                      <strong>
+                        {instructorProfile.stats?.averageRating > 0
+                          ? `${Number(instructorProfile.stats.averageRating).toFixed(1)} / 5`
+                          : 'New'}
+                      </strong>
+                      {instructorProfile.stats?.reviewsCount > 0 && ` (${instructorProfile.stats.reviewsCount} reviews)`}
+                    </span>
+                    {instructorProfile.address && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <FaMapMarkerAlt /> {instructorProfile.address}
+                      </span>
+                    )}
+                    {instructorProfile.website && (
+                      <a
+                        href={instructorProfile.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--teal)', fontWeight: 600 }}
+                      >
+                        <FaGlobe /> Website
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {(instructorProfile.introduction || instructorProfile.bio) && (
+                <p style={{ margin: '0 0 16px', fontSize: '0.92rem', color: 'var(--ink-secondary)', lineHeight: 1.6 }}>
+                  {instructorProfile.introduction || instructorProfile.bio}
+                </p>
+              )}
+
+              {(instructorProfile.skills || []).length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {instructorProfile.skills.map((sk, idx) => (
+                    <span key={idx} className="ch-badge ch-badge--neutral">
+                      {sk.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {((instructorProfile.education || []).length > 0 ||
+                (instructorProfile.workExperience || []).length > 0) && (
+                <div className="ch-grid-2" style={{ gap: 14, marginBottom: (instructorProfile.certificates || []).length > 0 ? 16 : 0 }}>
+                  {(instructorProfile.workExperience || []).length > 0 && (
+                    <div
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        background: 'var(--bg-canvas)',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: '0.84rem', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <FaBriefcase style={{ color: 'var(--teal)' }} /> Experience
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {instructorProfile.workExperience.slice(0, 3).map((exp, idx) => (
+                          <div key={idx} style={{ fontSize: '0.82rem' }}>
+                            <div style={{ fontWeight: 700 }}>{exp.position}</div>
+                            <div style={{ color: 'var(--ink-muted)' }}>
+                              {exp.organization} | {exp.startDate} - {exp.endDate || 'Present'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(instructorProfile.education || []).length > 0 && (
+                    <div
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        background: 'var(--bg-canvas)',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: '0.84rem', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <FaGraduationCap style={{ color: 'var(--indigo)' }} /> Education
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {instructorProfile.education.map((ed, idx) => (
+                          <div key={idx} style={{ fontSize: '0.82rem' }}>
+                            <div style={{ fontWeight: 700 }}>
+                              {[ed.degree, ed.fieldOfStudy].filter(Boolean).join(' - ')}
+                            </div>
+                            <div style={{ color: 'var(--ink-muted)' }}>{ed.institution}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(instructorProfile.certificates || []).length > 0 && (
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.84rem', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <FaCertificate style={{ color: 'var(--coral)' }} /> Verified Certificates
+                  </div>
+                  <div className="ch-grid-2" style={{ gap: 10 }}>
+                    {instructorProfile.certificates.map((cert, idx) => (
+                      <a
+                        key={idx}
+                        href={cert.imageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: 8,
+                          borderRadius: 10,
+                          background: 'var(--bg-canvas)',
+                          border: '1px solid var(--border)',
+                        }}
+                      >
+                        <img
+                          src={cert.imageUrl}
+                          alt={cert.name}
+                          style={{ width: 54, height: 40, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+                        />
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{cert.name}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="ch-card ch-card--pad">
             <h2 style={{ fontSize: '1.25rem', marginBottom: 14 }}>Student Reviews ({reviews.length})</h2>
