@@ -11,6 +11,7 @@ import Course from '../models/Course.js';
 import Instructor from '../models/Instructor.js';
 import LearningStreak from '../models/LearningStreak.js';
 import Order from '../models/Order.js';
+import Review from '../models/Review.js';
 import Student from '../models/Student.js';
 import User from '../models/User.js';
 import Wishlist from '../models/Wishlist.js';
@@ -191,19 +192,53 @@ router.get('/courses', async (req, res, next) => {
       filter.$or = [{ title: rx }, { subtitle: rx }, { 'instructor.name': rx }];
     }
 
-    const [courses, total, counts] = await Promise.all([
-      Course.find(filter)
-        .select('-curriculum')
-        .populate('category', 'name slug color')
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit),
-      Course.countDocuments(filter),
-      Course.aggregate([
-        { $match: { isDeleted: false } },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-      ]),
-    ]);
+    // Uu tien hien thi cac khoa hoc dang cho duyet (Pending) len dau danh sach kiem duyet
+    const statusPriority = status === 'All' ? 1 : 0;
+    let courses = [];
+    let total = 0;
+    let counts = [];
+
+    if (statusPriority) {
+      const [aggCourses, totalCount, aggCounts] = await Promise.all([
+        Course.aggregate([
+          { $match: filter },
+          {
+            $addFields: {
+              pendingFirst: { $cond: [{ $eq: ['$status', 'Pending'] }, 0, 1] },
+            },
+          },
+          { $sort: { pendingFirst: 1, createdAt: -1 } },
+          { $skip: (page - 1) * limit },
+          { $limit: limit },
+          { $project: { curriculum: 0, pendingFirst: 0 } },
+        ]),
+        Course.countDocuments(filter),
+        Course.aggregate([
+          { $match: { isDeleted: false } },
+          { $group: { _id: '$status', count: { $sum: 1 } } },
+        ]),
+      ]);
+      courses = await Course.populate(aggCourses, { path: 'category', select: 'name slug color' });
+      total = totalCount;
+      counts = aggCounts;
+    } else {
+      const [foundCourses, totalCount, aggCounts] = await Promise.all([
+        Course.find(filter)
+          .select('-curriculum')
+          .populate('category', 'name slug color')
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit),
+        Course.countDocuments(filter),
+        Course.aggregate([
+          { $match: { isDeleted: false } },
+          { $group: { _id: '$status', count: { $sum: 1 } } },
+        ]),
+      ]);
+      courses = foundCourses;
+      total = totalCount;
+      counts = aggCounts;
+    }
 
     const statusCounts = Object.fromEntries(counts.map((c) => [c._id, c.count]));
     return res.json({
@@ -215,6 +250,48 @@ router.get('/courses', async (req, res, next) => {
         limit,
         total,
         totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// Lay toan bo chi tiet mot khoa hoc (moi video, bai giang, dap an quiz va ho so giang vien) de Admin tham dinh
+router.get('/courses/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+
+    const course = await Course.findOne({ _id: req.params.id, isDeleted: false }).populate(
+      'category',
+      'name slug color'
+    );
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+
+    const [reviews, instructorUser, instructorDoc] = await Promise.all([
+      Review.find({ course: course._id, isDeleted: false })
+        .populate('user', 'name pfpImg')
+        .sort({ createdAt: -1 }),
+      User.findById(course.instructor?.ref).select('name email pfpImg isActivated'),
+      Instructor.findOne({ user: course.instructor?.ref }).select('occupation introduction address isApproved'),
+    ]);
+
+    return res.json({
+      course,
+      reviews,
+      educator: {
+        id: instructorUser?._id || course.instructor?.ref || null,
+        name: instructorUser?.name || course.instructor?.name || 'Educator',
+        email: instructorUser?.email || '',
+        avatar: instructorUser?.pfpImg || course.instructor?.avatar || '/media/avatar/01.jpg',
+        isActivated: instructorUser?.isActivated ?? true,
+        occupation: instructorDoc?.occupation || '',
+        introduction: instructorDoc?.introduction || '',
+        address: instructorDoc?.address || '',
       },
     });
   } catch (err) {
