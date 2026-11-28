@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import Chart from 'react-apexcharts';
 import { Link } from 'react-router-dom';
-import { FaArrowRight, FaAward, FaBookOpen, FaCheckCircle, FaFire, FaPlay } from 'react-icons/fa';
+import { FaArrowRight, FaAward, FaBookOpen, FaCheckCircle, FaFire, FaHeart, FaPlay } from 'react-icons/fa';
 import WorkspaceLayout from '@/layouts/WorkspaceLayout';
 import CourseCard from '@/components/CourseCard';
 import { useCourseHub } from '@/context/CourseHubContext';
@@ -24,9 +23,9 @@ function buildLastSevenDays(activeDates = []) {
   return result;
 }
 
-// Man hinh trang tong quan hoc vien hien thi thong ke tien do, chuoi ngay hoc va goi y khoa hoc
+// Man hinh trang tong quan hoc vien hien thi thong ke tien do, chuoi ngay hoc va goi y theo danh muc Wishlist
 export default function StudentDashboardPage() {
-  const { currentUser, courses, enrolledIds, streak, setStreak } = useCourseHub();
+  const { currentUser, wishlistIds, streak, setStreak } = useCourseHub();
   const [myCourses, setMyCourses] = useState([]);
   const [stats, setStats] = useState({
     totalCourses: 0,
@@ -34,7 +33,15 @@ export default function StudentDashboardPage() {
     totalLessons: 0,
     completedLessons: 0,
   });
+  const [recommendations, setRecommendations] = useState({
+    courses: [],
+    basedOnCategories: [],
+    hasWishlist: false,
+  });
   const [loading, setLoading] = useState(true);
+  const [loadingRecs, setLoadingRecs] = useState(true);
+
+  const wishlistKey = useMemo(() => [...wishlistIds].sort().join(','), [wishlistIds]);
 
   useEffect(() => {
     let active = true;
@@ -57,40 +64,39 @@ export default function StudentDashboardPage() {
     };
   }, [setStreak]);
 
-  const recommended = useMemo(
-    () => courses.filter((c) => !enrolledIds.includes(c._id) && c.status === 'Live').slice(0, 3),
-    [courses, enrolledIds]
-  );
+  // Tai danh sach khoa hoc goi y theo danh muc cua cac khoa hoc trong Wishlist cua hoc vien
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      setLoadingRecs(true);
+      try {
+        const res = await api.get('/api/student/recommendations');
+        if (!active) return;
+        setRecommendations({
+          courses: res?.courses || [],
+          basedOnCategories: res?.basedOnCategories || [],
+          hasWishlist: Boolean(res?.hasWishlist),
+        });
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (active) setLoadingRecs(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [wishlistKey]);
 
   const lastSevenDays = useMemo(
     () => buildLastSevenDays(streak?.activeDates || []),
     [streak?.activeDates]
   );
 
-  const progressChart = useMemo(() => {
-    const categories = myCourses.length > 0
-      ? myCourses.slice(0, 6).map((c) => (c.title.length > 14 ? `${c.title.slice(0, 14)}...` : c.title))
-      : ['No Courses'];
-    const data = myCourses.length > 0
-      ? myCourses.slice(0, 6).map((c) => c.progress?.percent ?? 0)
-      : [0];
-
-    return {
-      options: {
-        chart: { toolbar: { show: false }, fontFamily: 'Be Vietnam Pro, sans-serif' },
-        colors: ['#0f766e'],
-        plotOptions: { bar: { borderRadius: 8, columnWidth: '46%' } },
-        dataLabels: { enabled: false },
-        xaxis: {
-          categories,
-          labels: { hideOverlappingLabels: false, trim: true, style: { fontSize: '11px' } },
-        },
-        yaxis: { min: 0, max: 100, labels: { formatter: (val) => `${Math.round(val)}%` } },
-        grid: { borderColor: '#e4e4e7', strokeDashArray: 4 },
-      },
-      series: [{ name: 'Completion (%)', data }],
-    };
-  }, [myCourses]);
+  const overallPercent =
+    stats.totalLessons > 0
+      ? Math.min(100, Math.round(((stats.completedLessons || 0) / stats.totalLessons) * 100))
+      : 0;
 
   const studentName = currentUser?.name || 'Student';
 
@@ -147,7 +153,7 @@ export default function StudentDashboardPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 0.95fr', gap: 20, marginBottom: 28 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 0.95fr', gap: 20, marginBottom: 28, alignItems: 'start' }}>
         <div className="ch-card ch-card--pad">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h2 style={{ fontSize: '1.18rem', fontWeight: 800 }}>Continue Learning</h2>
@@ -217,13 +223,13 @@ export default function StudentDashboardPage() {
         </div>
 
         <div className="ch-card ch-card--pad">
-          <h2 style={{ fontSize: '1.18rem', fontWeight: 800, marginBottom: 6 }}>Learning Progress & Streak</h2>
-          <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+          <h2 style={{ fontSize: '1.18rem', fontWeight: 800, marginBottom: 6 }}>Learning Streak</h2>
+          <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
             Active Streak: <strong>{streak?.currentStreak ?? 0} days</strong> | Completed Courses:{' '}
             <strong>{stats.completedCourses || 0}</strong>
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 18 }}>
             {lastSevenDays.map((day) => (
               <div
                 key={day.key}
@@ -244,20 +250,97 @@ export default function StudentDashboardPage() {
             ))}
           </div>
 
-          <Chart options={progressChart.options} series={progressChart.series} type="bar" height={205} />
+          <div
+            style={{
+              padding: 14,
+              borderRadius: 12,
+              background: 'var(--bg-canvas)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: 8 }}>
+              <span style={{ color: 'var(--ink-muted)', fontWeight: 600 }}>Overall Lesson Completion</span>
+              <strong>
+                {stats.completedLessons || 0}/{stats.totalLessons || 0} ({overallPercent}%)
+              </strong>
+            </div>
+            <div className="ch-progress">
+              <div className="ch-progress__bar" style={{ width: `${overallPercent}%` }} />
+            </div>
+          </div>
         </div>
       </div>
 
-      {recommended.length > 0 && (
-        <div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: 14 }}>Recommended for You</h2>
+      <div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 10,
+            marginBottom: 14,
+          }}
+        >
+          <div>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>Recommended for You</h2>
+            {recommendations.basedOnCategories.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>Based on your Wishlist:</span>
+                {recommendations.basedOnCategories.map((cat) => (
+                  <span
+                    key={cat._id}
+                    className="ch-badge"
+                    style={{
+                      background: `${cat.color || '#0f766e'}18`,
+                      color: cat.color || 'var(--teal)',
+                      fontSize: '0.74rem',
+                    }}
+                  >
+                    {cat.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <Link
+            to="/student/wishlist"
+            style={{ fontSize: '0.84rem', color: 'var(--teal)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+          >
+            <FaHeart size={11} /> Manage Wishlist
+          </Link>
+        </div>
+
+        {loadingRecs ? (
+          <div className="ch-card ch-card--pad" style={{ textAlign: 'center', padding: 28, color: 'var(--ink-muted)' }}>
+            Finding courses matching your Wishlist categories...
+          </div>
+        ) : recommendations.courses.length > 0 ? (
           <div className="ch-grid-3">
-            {recommended.map((c) => (
+            {recommendations.courses.map((c) => (
               <CourseCard key={c._id} course={c} basePath="/student/courses" />
             ))}
           </div>
-        </div>
-      )}
+        ) : !recommendations.hasWishlist ? (
+          <div className="ch-card ch-card--pad" style={{ textAlign: 'center', padding: 30 }}>
+            <p style={{ color: 'var(--ink-muted)', marginBottom: 14 }}>
+              Save courses to your Wishlist so CourseHub can recommend more courses in the categories you care about.
+            </p>
+            <Link to="/student/courses" className="ch-btn ch-btn--sm ch-btn--primary">
+              Explore Courses
+            </Link>
+          </div>
+        ) : (
+          <div className="ch-card ch-card--pad" style={{ textAlign: 'center', padding: 30 }}>
+            <p style={{ color: 'var(--ink-muted)', marginBottom: 14 }}>
+              You have already enrolled in or wishlisted all available courses in your favorite categories.
+            </p>
+            <Link to="/student/courses" className="ch-btn ch-btn--sm ch-btn--outline">
+              Browse All Categories
+            </Link>
+          </div>
+        )}
+      </div>
     </WorkspaceLayout>
   );
 }
