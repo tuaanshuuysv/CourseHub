@@ -1,9 +1,12 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import Category from '../models/Category.js';
+import Coupon from '../models/Coupon.js';
 import Course from '../models/Course.js';
+import Instructor from '../models/Instructor.js';
 import Review from '../models/Review.js';
 import Student from '../models/Student.js';
+import User from '../models/User.js';
 import { optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -12,6 +15,44 @@ const router = express.Router();
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+// Lay thong ke thuc te cua nen tang va ma khuyen mai dang hoat dong tu co so du lieu
+router.get('/stats', async (_req, res, next) => {
+  try {
+    const now = new Date();
+    const [liveCourses, categoriesCount, instructorsCount, learnersCount, activePromo] =
+      await Promise.all([
+        Course.countDocuments({ status: 'Live', isDeleted: false, isPrivate: false }),
+        Category.countDocuments({ isActive: true }),
+        Instructor.countDocuments({ isApproved: true }),
+        User.countDocuments({ role: 'student', isVerified: true, isActivated: true }),
+        Coupon.findOne({
+          isActive: true,
+          startDate: { $lte: now },
+          expiryDate: { $gte: now },
+        })
+          .sort({ discountPercent: -1, code: 1 })
+          .select('code description discountPercent expiryDate'),
+      ]);
+
+    return res.json({
+      liveCourses,
+      categoriesCount,
+      instructorsCount,
+      learnersCount,
+      activePromo: activePromo
+        ? {
+            code: activePromo.code,
+            description: activePromo.description,
+            discountPercent: activePromo.discountPercent,
+            expiryDate: activePromo.expiryDate,
+          }
+        : null,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
 
 // Lay danh sach danh muc khoa hoc dang hoat dong kem so luong khoa hoc cong khai
 router.get('/categories', async (_req, res, next) => {
