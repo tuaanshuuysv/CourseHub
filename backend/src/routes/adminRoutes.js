@@ -535,4 +535,34 @@ router.get('/instructors', async (req, res, next) => {
   }
 });
 
+// Bat hoac tat quyen truy cap cua tai khoan giang vien da duyet
+router.patch('/instructors/:userId/status', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.userId)) {
+      return res.status(400).json({ message: 'Invalid userId' });
+    }
+    if (typeof req.body?.isActivated !== 'boolean') {
+      return res.status(400).json({ message: 'isActivated boolean is required' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { _id: req.params.userId, role: 'instructor' },
+      { isActivated: req.body.isActivated },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ message: 'Instructor account not found' });
+    }
+
+    return res.json({
+      message: user.isActivated
+        ? 'Instructor access restored successfully'
+        : 'Instructor account blocked successfully',
+      isActivated: user.isActivated,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
