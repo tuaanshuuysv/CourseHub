@@ -22,6 +22,7 @@ import EducatorStudentsPage from '@/pages/educator/EducatorStudentsPage';
 import EducatorEarningsPage from '@/pages/educator/EducatorEarningsPage';
 import EducatorProfilePage from '@/pages/educator/EducatorProfilePage';
 import EducatorSettingsPage from '@/pages/educator/EducatorSettingsPage';
+import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 
 // Thanh thong bao nhanh hien thi trang thai thao tac toan cuc
 function ToastBanner() {
@@ -200,6 +201,17 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={['instructor']}>
               <EducatorSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+
+        {/* Cac tuyen duong khong gian Quan tri vien (yeu cau dang nhap vai tro admin) */}
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminDashboardPage />
             </ProtectedRoute>
           }
         />
