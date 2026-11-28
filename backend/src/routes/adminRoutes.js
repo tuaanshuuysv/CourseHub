@@ -695,4 +695,27 @@ router.post('/coupons', async (req, res, next) => {
   }
 });
 
+// Bat hoac tat nhanh trang thai hoat dong cua mot ma giam gia
+router.patch('/coupons/:id/toggle', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid couponId' });
+    }
+
+    const coupon = await Coupon.findById(req.params.id);
+    if (!coupon) {
+      return res.status(404).json({ message: 'Coupon not found' });
+    }
+
+    coupon.isActive = !coupon.isActive;
+    await coupon.save();
+    return res.json({
+      message: coupon.isActive ? 'Coupon activated successfully' : 'Coupon deactivated successfully',
+      coupon,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
