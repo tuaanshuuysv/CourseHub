@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="560" viewBox="0 0 800 560">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fffbeb"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+    <linearGradient id="accent2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="560" rx="18" fill="url(#bg2)"/>
+  <rect x="22" y="22" width="756" height="516" rx="12" fill="none" stroke="#c2410c" stroke-width="4"/>
+  <rect x="34" y="34" width="732" height="492" rx="8" fill="none" stroke="#fed7aa" stroke-width="1.5"/>
+  <rect x="64" y="64" width="672" height="10" rx="5" fill="url(#accent2)"/>
+  <text x="400" y="132" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="4" fill="#c2410c">CLOUD ARCHITECTURE CERTIFICATION</text>
+  <text x="400" y="196" text-anchor="middle" font-family="Georgia, serif" font-size="32" font-weight="700" fill="#18181b">AWS Solutions Architect Professional</text>
+  <text x="400" y="232" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="18" fill="#52525b">Distributed Systems, Kubernetes &amp; High-Availability Cloud</text>
+  <line x1="220" y1="264" x2="580" y2="264" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="400" y="302" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#71717a">CERTIFIED EDUCATOR CREDENTIAL</text>
+  <text x="400" y="348" text-anchor="middle" font-family="Georgia, serif" font-size="28" font-weight="700" fill="#c2410c">AWS Cloud &amp; Data Architecture Track</text>
+  <text x="400" y="392" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#52525b">Validation Code: AWS-SAP-2025-4912</text>
+  <circle cx="670" cy="442" r="42" fill="#ea580c"/>
+  <circle cx="670" cy="442" r="34" fill="none" stroke="#ffedd5" stroke-width="2"/>
+  <text x="670" y="438" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="700" fill="#ffffff">CERTIFIED</text>
+  <text x="670" y="454" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#fed7aa">PRO</text>
+  <line x1="88" y1="458" x2="268" y2="458" stroke="#52525b" stroke-width="1.5"/>
+  <text x="178" y="478" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#52525b">AWS Training &amp; Certification Board</text>
+</svg>

@@ -13,7 +13,6 @@ import Wishlist from '../models/Wishlist.js';
 import Coupon from '../models/Coupon.js';
 import Order from '../models/Order.js';
 import Review from '../models/Review.js';
-import DraftVideo from '../models/DraftVideo.js';
 import { connectDB } from '../config/db.js';
 
 // Ham tro giup tao danh sach tien do bai giang khop voi so bai hoan thanh
@@ -217,7 +216,7 @@ export async function ensureSeeded() {
       thumbnail: '/media/courses/4by3/08.jpg',
       previewVideo: '/media/videos/720p.mp4',
       lecturesCount: 6,
-      studentsEnrolled: 3420,
+      studentsEnrolled: 3,
       status: 'Live',
       objectives: [
         'Architect reusable component primitives and design tokens',
@@ -338,7 +337,7 @@ export async function ensureSeeded() {
       thumbnail: '/media/courses/4by3/02.jpg',
       previewVideo: '/media/videos/720p.mp4',
       lecturesCount: 3,
-      studentsEnrolled: 2890,
+      studentsEnrolled: 1,
       status: 'Live',
       objectives: [
         'Build multi-brand design systems with Figma variables',
@@ -379,7 +378,7 @@ export async function ensureSeeded() {
       thumbnail: '/media/courses/4by3/04.jpg',
       previewVideo: '/media/videos/720p.mp4',
       lecturesCount: 2,
-      studentsEnrolled: 4180,
+      studentsEnrolled: 1,
       status: 'Live',
       objectives: ['Clean and analyze complex datasets', 'Build and deploy FastAPI data services'],
       instructor: { ref: tuUser._id, name: 'Dr. Hoang Anh Tu', avatar: '/media/avatar/06.jpg' },
@@ -412,7 +411,7 @@ export async function ensureSeeded() {
       thumbnail: '/media/courses/4by3/01.jpg',
       previewVideo: '/media/videos/720p.mp4',
       lecturesCount: 2,
-      studentsEnrolled: 1640,
+      studentsEnrolled: 1,
       status: 'Live',
       objectives: ['Design type-safe GraphQL schemas', 'Optimize MongoDB indexes and Redis caching'],
       instructor: { ref: huyEducatorUser._id, name: 'Nguyen Tuan Huy', avatar: '/media/avatar/01.jpg' },
@@ -445,7 +444,7 @@ export async function ensureSeeded() {
       thumbnail: '/media/courses/4by3/07.jpg',
       previewVideo: '/media/videos/720p.mp4',
       lecturesCount: 2,
-      studentsEnrolled: 2110,
+      studentsEnrolled: 1,
       status: 'Live',
       objectives: ['Write lean Dockerfiles', 'Deploy zero-downtime Kubernetes workloads'],
       instructor: { ref: datUser._id, name: 'Vo Quoc Dat', avatar: '/media/avatar/07.jpg' },
@@ -477,7 +476,7 @@ export async function ensureSeeded() {
       thumbnail: '/media/courses/4by3/06.jpg',
       previewVideo: '/media/videos/720p.mp4',
       lecturesCount: 1,
-      studentsEnrolled: 1920,
+      studentsEnrolled: 0,
       status: 'Live',
       objectives: ['Build acquisition funnels', 'Measure CAC and LTV'],
       instructor: { ref: linhUser._id, name: 'Dang Ngoc Linh', avatar: '/media/avatar/08.jpg' },
@@ -521,7 +520,7 @@ export async function ensureSeeded() {
     },
   ]);
 
-  // 5. Khoi tao ho so Giang vien va yeu cau xet duyet giang vien (Instructor)
+  // 5. Khoi tao ho so Giang vien va yeu cau xet duyet giang vien kem kinh nghiem va chung chi
   await Instructor.insertMany([
     {
       user: huyEducatorUser._id,
@@ -535,6 +534,34 @@ export async function ensureSeeded() {
         { name: 'Node.js & MongoDB', level: 92 },
         { name: 'UI/UX Systems', level: 90 },
       ],
+      workExperience: [
+        {
+          organization: 'VNG Corporation',
+          position: 'Principal Frontend Architect',
+          startDate: '2022-03',
+          endDate: 'Present',
+          supervisor: {
+            name: 'Le Quang Minh',
+            contact: 'minh.le@vng.example.vn | +84 903 111 222',
+          },
+        },
+        {
+          organization: 'FPT Software',
+          position: 'Senior React & MERN Engineer',
+          startDate: '2019-06',
+          endDate: '2022-02',
+          supervisor: {
+            name: 'Pham Thi Mai',
+            contact: 'mai.pham@fsoft.example.vn',
+          },
+        },
+      ],
+      certificates: [
+        {
+          name: 'Meta Front-End Architect Certificate',
+          imageUrl: '/media/certificates/meta-frontend-architect.svg',
+        },
+      ],
       myCourses: [courses[0]._id, courses[1]._id, courses[3]._id, courses[6]._id],
       myStudents: [huyStudentUser._id, khoaUser._id, haUser._id],
     },
@@ -544,6 +571,24 @@ export async function ensureSeeded() {
       occupation: 'Data Systems Architect',
       introduction: 'Applied Python data engineering and distributed systems.',
       isApproved: true,
+      workExperience: [
+        {
+          organization: 'HCMUTE Data & Systems Lab',
+          position: 'Lead Data Systems Architect',
+          startDate: '2020-01',
+          endDate: 'Present',
+          supervisor: {
+            name: 'Assoc. Prof. Tran Van Nam',
+            contact: 'nam.tran@hcmute.example.edu.vn',
+          },
+        },
+      ],
+      certificates: [
+        {
+          name: 'AWS Solutions Architect Professional',
+          imageUrl: '/media/certificates/aws-solutions-architect.svg',
+        },
+      ],
       myCourses: [courses[2]._id],
       myStudents: [khoaUser._id],
     },
@@ -553,6 +598,24 @@ export async function ensureSeeded() {
       occupation: 'Staff Site Reliability Engineer',
       introduction: 'Kubernetes, cloud infrastructure, and CI/CD.',
       isApproved: true,
+      workExperience: [
+        {
+          organization: 'CloudScale Vietnam',
+          position: 'Staff Site Reliability Engineer',
+          startDate: '2021-04',
+          endDate: 'Present',
+          supervisor: {
+            name: 'Nguyen Duc Anh',
+            contact: 'anh.nguyen@cloudscale.example.vn',
+          },
+        },
+      ],
+      certificates: [
+        {
+          name: 'AWS Solutions Architect Professional',
+          imageUrl: '/media/certificates/aws-solutions-architect.svg',
+        },
+      ],
       myCourses: [courses[4]._id],
       myStudents: [haUser._id],
     },
@@ -562,16 +625,62 @@ export async function ensureSeeded() {
       occupation: 'Head of Growth',
       introduction: 'Product-led growth and marketing analytics.',
       isApproved: true,
+      workExperience: [
+        {
+          organization: 'SaaS Growth Lab',
+          position: 'Head of Growth Analytics',
+          startDate: '2021-01',
+          endDate: 'Present',
+          supervisor: {
+            name: 'Do Hoang Yen',
+            contact: 'yen.do@growthlab.example.vn',
+          },
+        },
+      ],
+      certificates: [
+        {
+          name: 'Google UX & Product Analytics Certificate',
+          imageUrl: '/media/certificates/google-ux-motion.svg',
+        },
+      ],
       myCourses: [courses[5]._id],
       myStudents: [],
     },
-    // Yeu cau dang ky tro thanh giang vien dang cho Admin duyet (su dung dau gach ngang ASCII)
+    // Yeu cau dang ky tro thanh giang vien dang cho Admin duyet voi day du kinh nghiem va chung chi
     {
       user: applicant1._id,
       address: 'Ho Chi Minh City, Vietnam',
       occupation: 'Senior Rust & Systems Engineer (7 years)',
       introduction: 'Portfolio: github.com/phuc-rust - Applying to teach Systems Programming.',
       isApproved: false,
+      workExperience: [
+        {
+          organization: 'Zalo Infrastructure Engineering',
+          position: 'Senior Rust & Systems Engineer',
+          startDate: '2021-05',
+          endDate: 'Present',
+          supervisor: {
+            name: 'Bui Thanh Son',
+            contact: 'son.bui@zalo-infra.example.vn | +84 912 345 678',
+          },
+        },
+        {
+          organization: 'KMS Technology',
+          position: 'Systems Software Engineer',
+          startDate: '2018-08',
+          endDate: '2021-04',
+          supervisor: {
+            name: 'Tran Huu Loc',
+            contact: 'loc.tran@kms.example.vn',
+          },
+        },
+      ],
+      certificates: [
+        {
+          name: 'Linux Foundation Certified Systems & Rust Engineer',
+          imageUrl: '/media/certificates/rust-systems-engineer.svg',
+        },
+      ],
     },
     {
       user: applicant2._id,
@@ -579,6 +688,24 @@ export async function ensureSeeded() {
       occupation: 'Motion Designer @ Studio X (5 years)',
       introduction: 'Portfolio: dribbble.com/thaovy - Applying to teach Motion & Interactive Prototyping.',
       isApproved: false,
+      workExperience: [
+        {
+          organization: 'Studio X Product Design',
+          position: 'Senior Motion & Interactive Designer',
+          startDate: '2021-02',
+          endDate: 'Present',
+          supervisor: {
+            name: 'Vo Ngoc Khanh',
+            contact: 'khanh.vo@studiox.example.vn | +84 908 765 432',
+          },
+        },
+      ],
+      certificates: [
+        {
+          name: 'Google UX & Interactive Prototyping Certificate',
+          imageUrl: '/media/certificates/google-ux-motion.svg',
+        },
+      ],
     },
   ]);
 
@@ -656,20 +783,41 @@ export async function ensureSeeded() {
     },
   ]);
 
-  // Tao du 12 ngay lien tiep dinh dang YYYY-MM-DD khop voi currentStreak = 12
-  const activeDates = Array.from({ length: 12 }, (_, idx) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (11 - idx));
-    return d.toISOString().slice(0, 10);
-  });
+  // Tao chuoi ngay lien tiep ket thuc o ngay hom nay cho cac hoc vien da ghi danh
+  const buildRecentDates = (count) =>
+    Array.from({ length: count }, (_, idx) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (count - 1 - idx));
+      return d.toISOString().slice(0, 10);
+    });
 
-  await LearningStreak.create({
-    userId: huyStudentUser._id,
-    currentStreak: 12,
-    longestStreak: 15,
-    lastActiveDate: activeDates[activeDates.length - 1],
-    activeDates,
-  });
+  const huyDates = buildRecentDates(12);
+  const khoaDates = buildRecentDates(5);
+  const haDates = buildRecentDates(3);
+
+  await LearningStreak.insertMany([
+    {
+      userId: huyStudentUser._id,
+      currentStreak: 12,
+      longestStreak: 15,
+      lastActiveDate: huyDates[huyDates.length - 1],
+      activeDates: huyDates,
+    },
+    {
+      userId: khoaUser._id,
+      currentStreak: 5,
+      longestStreak: 8,
+      lastActiveDate: khoaDates[khoaDates.length - 1],
+      activeDates: khoaDates,
+    },
+    {
+      userId: haUser._id,
+      currentStreak: 3,
+      longestStreak: 4,
+      lastActiveDate: haDates[haDates.length - 1],
+      activeDates: haDates,
+    },
+  ]);
 
   // 8. Khoi tao Danh sach yeu thich (chi luu tai collection Wishlist) va Gio hang (Cart)
   await Wishlist.insertMany([
@@ -808,13 +956,6 @@ export async function ensureSeeded() {
       description: 'Clear Python feature engineering examples!',
     },
   ]);
-
-  // 12. Khoi tao ban ghi video nhap (DraftVideo) de du 14 collections trong MongoDB
-  await DraftVideo.create({
-    key: 'drafts/react-19-preview-720p.mp4',
-    contentType: 'video/mp4',
-    expireAt: new Date('2027-12-31'),
-  });
 
   console.log('Hoan tat khoi tao du lieu mau CourseHub.');
 }
