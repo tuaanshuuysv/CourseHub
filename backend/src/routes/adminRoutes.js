@@ -381,4 +381,51 @@ router.delete('/categories/:id', async (req, res, next) => {
   }
 });
 
+// Lay danh sach hoc vien he thong kem so khoa ghi danh, hoan thanh va tong chi tieu
+router.get('/students', async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const filter = { role: 'student' };
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), 'i');
+      filter.$or = [{ name: rx }, { email: rx }];
+    }
+
+    const users = await User.find(filter).sort({ createdAt: -1 });
+    const userIds = users.map((u) => u._id);
+
+    const [students, orders] = await Promise.all([
+      Student.find({ user: { $in: userIds } }),
+      Order.find({ status: 'completed', user: { $in: userIds } }).select('user totalAmount'),
+    ]);
+
+    const studentMap = Object.fromEntries(students.map((s) => [String(s.user), s]));
+    const spentMap = new Map();
+    for (const ord of orders) {
+      const key = String(ord.user);
+      spentMap.set(key, Number(((spentMap.get(key) || 0) + Number(ord.totalAmount || 0)).toFixed(2)));
+    }
+
+    return res.json(
+      users.map((u) => {
+        const st = studentMap[String(u._id)];
+        return {
+          id: u._id,
+          name: u.name,
+          email: u.email,
+          avatar: u.pfpImg,
+          isVerified: u.isVerified,
+          isActivated: u.isActivated,
+          enrolledCourses: st?.myCourses?.length || 0,
+          completedCourses: st?.stats?.completedCourses || 0,
+          totalSpent: spentMap.get(String(u._id)) || 0,
+          createdAt: u.createdAt,
+        };
+      })
+    );
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
