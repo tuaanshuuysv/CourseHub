@@ -316,6 +316,9 @@ router.get('/courses/:id', async (req, res, next) => {
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
     }
+    if (course.status === 'Blocked') {
+      return res.status(403).json({ message: 'This course has been blocked by Administrator and cannot be viewed' });
+    }
 
     const reviews = await Review.find({ course: course._id, isDeleted: false })
       .populate('user', 'name pfpImg')
@@ -517,16 +520,18 @@ router.put('/courses/:id', async (req, res, next) => {
       curriculum,
     } = req.body || {};
 
-    // Chan giang vien tu nang khoa hoc len Live hoac tu mo khoa khoa bi Admin chan
+    // Khoa hoc bi Admin khoa (Blocked) thi giang vien khong duoc sua doi hoac xem noi dung cho den khi Admin mo khoa
+    if (course.status === 'Blocked') {
+      return res.status(403).json({ message: 'This course has been blocked by Administrator and cannot be modified' });
+    }
+
+    // Chan giang vien tu nang khoa hoc len Live hoac tu gan trang thai kiem duyet
     if (status !== undefined) {
       if (!VALID_COURSE_STATUSES.includes(status)) {
         return res.status(400).json({ message: 'Invalid course status' });
       }
       if (status === 'Live' && course.status !== 'Live') {
         return res.status(403).json({ message: 'Only admins can publish a course to Live status' });
-      }
-      if (course.status === 'Blocked' && status !== 'Blocked') {
-        return res.status(403).json({ message: 'Blocked courses can only be unblocked by an admin' });
       }
       if (['Rejected', 'Blocked'].includes(status) && status !== course.status) {
         return res.status(403).json({ message: 'Instructors cannot assign moderation statuses' });

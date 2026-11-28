@@ -348,7 +348,7 @@ router.get('/wishlist', async (req, res, next) => {
       .sort({ addedAt: -1 })
       .populate({
         path: 'courseId',
-        match: { isDeleted: false },
+        match: { isDeleted: false, status: 'Live', isPrivate: false },
         select: '-curriculum',
         populate: { path: 'category', select: 'name slug color' },
       });
@@ -367,15 +367,21 @@ router.post('/wishlist/toggle', async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid courseId' });
     }
 
-    const course = await Course.findOne({ _id: courseId, isDeleted: false }).select('_id');
-    if (!course) {
-      return res.status(404).json({ message: 'Course not found' });
-    }
-
-    const existing = await Wishlist.findOne({ userId: req.auth.id, courseId: course._id });
+    const existing = await Wishlist.findOne({ userId: req.auth.id, courseId });
     if (existing) {
       await Wishlist.deleteOne({ _id: existing._id });
       return res.json({ wished: false, message: 'Removed from wishlist' });
+    }
+
+    const course = await Course.findOne({ _id: courseId, isDeleted: false }).select('_id status isPrivate');
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+    if (course.status === 'Blocked') {
+      return res.status(403).json({ message: 'This course has been blocked by Administrator' });
+    }
+    if (course.status !== 'Live' || course.isPrivate) {
+      return res.status(404).json({ message: 'Course is currently unavailable' });
     }
 
     await Wishlist.create({ userId: req.auth.id, courseId: course._id });
@@ -390,7 +396,7 @@ router.get('/cart', async (req, res, next) => {
   try {
     const cart = await Cart.findOne({ user: req.auth.id }).populate({
       path: 'courses.course',
-      match: { isDeleted: false },
+      match: { isDeleted: false, status: 'Live', isPrivate: false },
       select: '-curriculum',
       populate: { path: 'category', select: 'name slug color' },
     });
@@ -691,7 +697,7 @@ router.get('/my-courses', async (req, res, next) => {
     const [student, progresses, streak] = await Promise.all([
       Student.findOne({ user: req.auth.id }).populate({
         path: 'myCourses.course',
-        match: { isDeleted: false },
+        match: { isDeleted: false, status: { $ne: 'Blocked' } },
         select: '-curriculum',
         populate: { path: 'category', select: 'name slug color' },
       }),
@@ -774,6 +780,9 @@ router.get('/learning/:courseId', async (req, res, next) => {
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
     }
+    if (course.status === 'Blocked') {
+      return res.status(403).json({ message: 'This course has been blocked by Administrator' });
+    }
 
     const allowed = await hasCourseLearningAccess(req.auth.id, course);
     if (!allowed) {
@@ -833,6 +842,9 @@ router.post('/learning/:courseId/progress', async (req, res, next) => {
     const course = await Course.findOne({ _id: req.params.courseId, isDeleted: false });
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
+    }
+    if (course.status === 'Blocked') {
+      return res.status(403).json({ message: 'This course has been blocked by Administrator' });
     }
 
     const allowed = await hasCourseLearningAccess(req.auth.id, course);
@@ -971,6 +983,9 @@ router.post('/learning/:courseId/quiz/check', async (req, res, next) => {
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
     }
+    if (course.status === 'Blocked') {
+      return res.status(403).json({ message: 'This course has been blocked by Administrator' });
+    }
 
     const allowed = await hasCourseLearningAccess(req.auth.id, course);
     if (!allowed) {
@@ -1021,9 +1036,12 @@ router.post('/courses/:courseId/reviews', async (req, res, next) => {
       return res.status(400).json({ message: 'Please provide a rating between 1 and 5 and a review comment' });
     }
 
-    const course = await Course.findOne({ _id: req.params.courseId, isDeleted: false }).select('_id');
+    const course = await Course.findOne({ _id: req.params.courseId, isDeleted: false }).select('_id status');
     if (!course) {
       return res.status(404).json({ message: 'Course not found' });
+    }
+    if (course.status === 'Blocked') {
+      return res.status(403).json({ message: 'This course has been blocked by Administrator' });
     }
 
     const isEnrolled = await Student.exists({ user: req.auth.id, 'myCourses.course': course._id });

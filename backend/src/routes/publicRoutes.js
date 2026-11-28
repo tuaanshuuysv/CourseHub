@@ -179,6 +179,12 @@ router.get('/courses/:id', optionalAuth, async (req, res, next) => {
 
     const isOwner = Boolean(req.auth && String(course.instructor.ref) === String(req.auth.id));
     const isAdmin = req.auth?.role === 'admin';
+
+    // Khoa hoc bi Admin khoa (Blocked) thi khong ai co the xem duoc nua ngoai Quan tri vien
+    if (course.status === 'Blocked' && !isAdmin) {
+      return res.status(403).json({ message: 'This course has been blocked by Administrator' });
+    }
+
     let isEnrolled = false;
 
     if (req.auth && !isAdmin) {
