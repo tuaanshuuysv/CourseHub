@@ -222,4 +222,32 @@ router.get('/courses', async (req, res, next) => {
   }
 });
 
+// Cap nhat trang thai kiem duyet cua khoa hoc (Live, Pending, Rejected, Blocked, Draft)
+router.patch('/courses/:id/status', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid courseId' });
+    }
+    const status = typeof req.body?.status === 'string' ? req.body.status.trim() : '';
+    if (!VALID_COURSE_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Invalid course status' });
+    }
+
+    const course = await Course.findOneAndUpdate(
+      { _id: req.params.id, isDeleted: false },
+      { status },
+      { new: true, runValidators: true }
+    )
+      .select('-curriculum')
+      .populate('category', 'name slug color');
+
+    if (!course) {
+      return res.status(404).json({ message: 'Course not found' });
+    }
+    return res.json({ message: 'Course status updated successfully', course });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
