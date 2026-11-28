@@ -307,4 +307,53 @@ router.post('/categories', async (req, res, next) => {
   }
 });
 
+// Cap nhat thong tin danh muc khoa hoc (ten, slug, mo ta, mau sac, trang thai)
+router.put('/categories/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid categoryId' });
+    }
+
+    const updatePayload = {};
+    if (typeof req.body?.name === 'string' && req.body.name.trim()) {
+      const cleanName = req.body.name.trim();
+      const slug = makeSlug(cleanName);
+      if (!slug) {
+        return res.status(400).json({ message: 'Category name must contain alphanumeric characters' });
+      }
+      const dup = await Category.findOne({
+        _id: { $ne: req.params.id },
+        $or: [{ name: new RegExp('^' + escapeRegex(cleanName) + '$', 'i') }, { slug }],
+      });
+      if (dup) {
+        return res.status(409).json({ message: 'Category name or slug already exists' });
+      }
+      updatePayload.name = cleanName;
+      updatePayload.slug = slug;
+    }
+
+    if (req.body?.description !== undefined) {
+      updatePayload.description = String(req.body.description).trim();
+    }
+    if (typeof req.body?.color === 'string' && req.body.color.trim()) {
+      updatePayload.color = req.body.color.trim();
+    }
+    if (req.body?.isActive !== undefined) {
+      updatePayload.isActive = Boolean(req.body.isActive);
+    }
+
+    const category = await Category.findByIdAndUpdate(req.params.id, updatePayload, {
+      new: true,
+      runValidators: true,
+    });
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    return res.json({ message: 'Category updated successfully', category });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
