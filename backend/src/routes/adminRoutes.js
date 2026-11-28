@@ -428,4 +428,46 @@ router.get('/students', async (req, res, next) => {
   }
 });
 
+// Khoa, mo khoa hoac xoa vinh vien tai khoan hoc vien chua xac thuc OTP
+router.patch('/students/:id/status', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid studentId' });
+    }
+    const action = typeof req.body?.action === 'string' ? req.body.action.trim() : '';
+    if (!['block', 'unblock', 'remove'].includes(action)) {
+      return res.status(400).json({ message: 'Action must be block, unblock, or remove' });
+    }
+
+    const user = await User.findOne({ _id: req.params.id, role: 'student' });
+    if (!user) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    if (action === 'remove') {
+      if (user.isVerified) {
+        return res.status(400).json({ message: 'Only unverified accounts can be permanently removed' });
+      }
+      await Promise.all([
+        Student.deleteOne({ user: user._id }),
+        Cart.deleteOne({ user: user._id }),
+        Wishlist.deleteMany({ userId: user._id }),
+        LearningStreak.deleteOne({ userId: user._id }),
+        Instructor.deleteOne({ user: user._id, isApproved: false }),
+        User.deleteOne({ _id: user._id }),
+      ]);
+      return res.json({ message: 'Unverified student removed successfully' });
+    }
+
+    user.isActivated = action === 'unblock';
+    await user.save();
+    return res.json({
+      message: user.isActivated ? 'Student unblocked successfully' : 'Student blocked successfully',
+      isActivated: user.isActivated,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
