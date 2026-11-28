@@ -356,4 +356,29 @@ router.put('/categories/:id', async (req, res, next) => {
   }
 });
 
+// Xoa danh muc khoa hoc an toan (chan xoa khi van con khoa hoc dang su dung)
+router.delete('/categories/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid categoryId' });
+    }
+
+    const usedCount = await Course.countDocuments({ category: req.params.id, isDeleted: false });
+    if (usedCount > 0) {
+      return res.status(409).json({
+        message: 'Cannot delete this category because it is being used by existing courses. Please reassign or remove those courses first.',
+      });
+    }
+
+    const deleted = await Category.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    return res.json({ message: 'Category deleted successfully' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
