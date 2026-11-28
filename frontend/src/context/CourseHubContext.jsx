@@ -11,12 +11,20 @@ export function useCourseHub() {
 }
 
 const EMPTY_STREAK = { currentStreak: 0, longestStreak: 0, activeDates: [] };
+const EMPTY_PLATFORM_STATS = {
+  liveCourses: 0,
+  categoriesCount: 0,
+  instructorsCount: 0,
+  learnersCount: 0,
+  activePromo: null,
+};
 
 export function CourseHubProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [streak, setStreak] = useState(EMPTY_STREAK);
   const [courses, setCourses] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [platformStats, setPlatformStats] = useState(EMPTY_PLATFORM_STATS);
   const [wishlistIds, setWishlistIds] = useState([]);
   const [cartIds, setCartIds] = useState([]);
   const [enrolledIds, setEnrolledIds] = useState([]);
@@ -45,15 +53,25 @@ export function CourseHubProvider({ children }) {
     };
   }, []);
 
-  // Tai danh sach danh muc va khoa hoc cong khai tu backend
+  // Tai danh sach danh muc, khoa hoc cong khai va thong ke nen tang tu backend
   const refreshPublicCatalog = useCallback(async () => {
     try {
-      const [catRes, courseRes] = await Promise.all([
+      const [catRes, courseRes, statsRes] = await Promise.all([
         api.get('/api/categories'),
         api.get('/api/courses?limit=50'),
+        api.get('/api/stats'),
       ]);
       setCategories(Array.isArray(catRes) ? catRes : []);
       setCourses(courseRes?.courses || []);
+      if (statsRes && typeof statsRes === 'object') {
+        setPlatformStats({
+          liveCourses: Number(statsRes.liveCourses || 0),
+          categoriesCount: Number(statsRes.categoriesCount || 0),
+          instructorsCount: Number(statsRes.instructorsCount || 0),
+          learnersCount: Number(statsRes.learnersCount || 0),
+          activePromo: statsRes.activePromo || null,
+        });
+      }
     } catch {
       // Bo qua loi khi mang gian doan trong luc khoi tao
     }
@@ -209,6 +227,7 @@ export function CourseHubProvider({ children }) {
       setStreak,
       courses,
       categories,
+      platformStats,
       wishlistIds,
       cartIds,
       enrolledIds,
@@ -229,6 +248,7 @@ export function CourseHubProvider({ children }) {
       streak,
       courses,
       categories,
+      platformStats,
       wishlistIds,
       cartIds,
       enrolledIds,

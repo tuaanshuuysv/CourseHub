@@ -7,10 +7,11 @@ import { useCourseHub } from '@/context/CourseHubContext';
 
 // Man hinh trang chu gioi thieu nen tang va danh muc khoa hoc noi bat
 export default function HomePage() {
-  const { courses, categories } = useCourseHub();
+  const { courses, categories, platformStats } = useCourseHub();
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   const liveCourses = courses.filter((c) => c.status === 'Live');
+  const activePromo = platformStats?.activePromo || null;
   const filtered =
     selectedCategory === 'All'
       ? liveCourses
@@ -51,16 +52,16 @@ export default function HomePage() {
 
               <div className="ch-hero-stats">
                 <div className="ch-hero-stat">
-                  <strong>{liveCourses.length}+</strong>
+                  <strong>{platformStats?.liveCourses || liveCourses.length}</strong>
                   <span>Live Courses</span>
                 </div>
                 <div className="ch-hero-stat">
-                  <strong>{categories.length}</strong>
+                  <strong>{platformStats?.categoriesCount || categories.length}</strong>
                   <span>Disciplines</span>
                 </div>
                 <div className="ch-hero-stat">
-                  <strong>96%</strong>
-                  <span>Completion Rate</span>
+                  <strong>{platformStats?.instructorsCount ?? 0}</strong>
+                  <span>Verified Educators</span>
                 </div>
               </div>
             </div>
@@ -109,18 +110,33 @@ export default function HomePage() {
                 </Link>
               </div>
 
-              <div className="ch-bento-tile ch-bento-tile--coral">
-                <div style={{ fontSize: '0.78rem', color: 'var(--coral)', fontWeight: 700 }}>LAUNCH PROMO</div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 800 }}>
-                  Code: COURSEHUB20
+              {activePromo ? (
+                <div className="ch-bento-tile ch-bento-tile--coral">
+                  <div style={{ fontSize: '0.78rem', color: 'var(--coral)', fontWeight: 700 }}>ACTIVE PROMO</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 800 }}>
+                    Code: {activePromo.code}
+                  </div>
+                  <Link
+                    to="/student/cart"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84rem', fontWeight: 700, color: 'var(--coral)' }}
+                  >
+                    Apply {activePromo.discountPercent}% off in Cart <FaArrowRight size={12} />
+                  </Link>
                 </div>
-                <Link
-                  to="/student/cart"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84rem', fontWeight: 700, color: 'var(--coral)' }}
-                >
-                  Apply 20% off in Cart <FaArrowRight size={12} />
-                </Link>
-              </div>
+              ) : (
+                <div className="ch-bento-tile ch-bento-tile--coral">
+                  <div style={{ fontSize: '0.78rem', color: 'var(--coral)', fontWeight: 700 }}>LEARNING COMMUNITY</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 800 }}>
+                    {platformStats?.learnersCount ?? 0} Active Learners
+                  </div>
+                  <Link
+                    to="/courses"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84rem', fontWeight: 700, color: 'var(--coral)' }}
+                  >
+                    Browse Catalog <FaArrowRight size={12} />
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -185,10 +201,10 @@ export default function HomePage() {
           >
             <div style={{ maxWidth: 620 }}>
               <span className="ch-badge" style={{ background: 'rgba(249,115,22,0.2)', color: '#fdba74' }}>
-                Become an Instructor (UC-3.1)
+                Become an Instructor
               </span>
               <h2 style={{ color: '#fff', fontSize: '1.7rem', marginTop: 10 }}>
-                Share your expertise with thousands of CourseHub learners
+                Share your expertise with motivated CourseHub learners
               </h2>
               <p style={{ color: '#cbd5e1', margin: '8px 0 0', fontSize: '0.94rem' }}>
                 Apply directly from your Student Profile or open the Educator Studio to build courses and quizzes.
