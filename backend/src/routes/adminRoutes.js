@@ -250,4 +250,32 @@ router.patch('/courses/:id/status', async (req, res, next) => {
   }
 });
 
+// Lay danh sach danh muc khoa hoc kem tong so khoa hoc dang su dung tung danh muc
+router.get('/categories', async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const filter = q
+      ? { $or: [{ name: new RegExp(escapeRegex(q), 'i') }, { slug: new RegExp(escapeRegex(q), 'i') }] }
+      : {};
+
+    const [categories, counts] = await Promise.all([
+      Category.find(filter).sort({ createdAt: -1 }),
+      Course.aggregate([
+        { $match: { isDeleted: false } },
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const countMap = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
+    return res.json(
+      categories.map((cat) => ({
+        ...cat.toObject(),
+        coursesCount: countMap[String(cat._id)] || 0,
+      }))
+    );
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
