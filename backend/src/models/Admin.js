@@ -11,6 +11,8 @@ const adminSchema = new mongoose.Schema(
     isVerified: { type: Boolean, default: true },
     verifyOtp: { type: String, default: '', select: false },
     verifyOtpExpireAt: { type: Date, default: null, select: false },
+    // Moc thoi gian doi mat khau de vo hieu hoa cac JWT cu da cap truoc do
+    passwordChangedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

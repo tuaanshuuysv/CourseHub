@@ -59,6 +59,16 @@ async function resolveAccount(decoded) {
   if (decoded.role === 'admin') {
     const admin = await Admin.findById(decoded.id);
     if (!admin || !admin.isApproved) return null;
+
+    // Vo hieu hoa token cu neu Quan tri vien da doi mat khau sau thoi diem cap token
+    if (admin.passwordChangedAt && decoded.iat) {
+      const tokenIssuedAtMs = decoded.iat * 1000;
+      const passwordChangedAtMs = admin.passwordChangedAt.getTime() - 1000;
+      if (tokenIssuedAtMs < passwordChangedAtMs) {
+        return null;
+      }
+    }
+
     return { id: admin._id.toString(), role: 'admin', account: admin };
   }
 
