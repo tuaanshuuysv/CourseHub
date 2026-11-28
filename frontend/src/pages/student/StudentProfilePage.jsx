@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   FaBriefcase,
   FaCamera,
   FaCertificate,
+  FaChalkboardTeacher,
   FaCheckCircle,
   FaClock,
   FaLock,
@@ -504,9 +506,14 @@ export default function StudentProfilePage() {
               </div>
 
               {currentUser?.role === 'instructor' ? (
-                <p style={{ margin: 0, color: 'var(--ink-secondary)', fontSize: '0.92rem' }}>
-                  Your account already has Instructor privileges to create and manage courses.
-                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
+                  <p style={{ margin: 0, color: 'var(--ink-secondary)', fontSize: '0.92rem' }}>
+                    Your account already has Instructor privileges to create and manage courses.
+                  </p>
+                  <Link to="/instructor/dashboard" className="ch-btn ch-btn--sm ch-btn--primary">
+                    <FaChalkboardTeacher /> Open Educator Studio
+                  </Link>
+                </div>
               ) : instructorApp ? (
                 <div
                   style={{

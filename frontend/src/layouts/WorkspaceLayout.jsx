@@ -1,9 +1,11 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   FaBookOpen,
+  FaChalkboardTeacher,
   FaChartLine,
   FaCog,
   FaCompass,
+  FaExchangeAlt,
   FaFolderOpen,
   FaGraduationCap,
   FaHeart,
@@ -100,6 +102,13 @@ export default function WorkspaceLayout({ variant = 'student', title, subtitle, 
   const isDarkSidebar = variant === 'educator' || variant === 'admin';
   const roleLabel = variant === 'educator' ? 'Educator' : variant === 'admin' ? 'Admin' : 'Student';
   const groups = MENUS[variant] || MENUS.student;
+  const isInstructorAccount = currentUser?.role === 'instructor';
+  const workspaceSwitchTarget =
+    isInstructorAccount && variant === 'student'
+      ? { to: '/instructor/dashboard', label: 'Educator Studio', sidebarLabel: 'Switch to Educator Studio', icon: <FaChalkboardTeacher /> }
+      : isInstructorAccount && variant === 'educator'
+        ? { to: '/student/dashboard', label: 'Student View', sidebarLabel: 'Switch to Student View', icon: <FaGraduationCap /> }
+        : null;
 
   const avatar =
     currentUser?.pfpImg ||
@@ -154,7 +163,29 @@ export default function WorkspaceLayout({ variant = 'student', title, subtitle, 
             ))}
           </div>
 
-          <div style={{ paddingTop: 14, borderTop: `1px solid ${isDarkSidebar ? 'rgba(255,255,255,0.1)' : 'var(--border)'}` }}>
+          <div
+            style={{
+              paddingTop: 14,
+              borderTop: `1px solid ${isDarkSidebar ? 'rgba(255,255,255,0.1)' : 'var(--border)'}`,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+            }}
+          >
+            {workspaceSwitchTarget && (
+              <Link
+                to={workspaceSwitchTarget.to}
+                className="ch-sidebar__link"
+                style={{
+                  background: isDarkSidebar ? 'rgba(20,184,166,0.16)' : 'var(--teal-soft)',
+                  color: isDarkSidebar ? '#5eead4' : 'var(--teal-dark)',
+                  fontWeight: 700,
+                }}
+              >
+                <span style={{ fontSize: '0.95rem', display: 'inline-flex' }}>{workspaceSwitchTarget.icon}</span>
+                <span>{workspaceSwitchTarget.sidebarLabel}</span>
+              </Link>
+            )}
             <button
               type="button"
               onClick={async () => {
@@ -184,6 +215,15 @@ export default function WorkspaceLayout({ variant = 'student', title, subtitle, 
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               {actions}
+              {workspaceSwitchTarget && (
+                <Link
+                  to={workspaceSwitchTarget.to}
+                  className={`ch-btn ch-btn--sm ${variant === 'student' ? 'ch-btn--dark' : 'ch-btn--outline'}`}
+                  title={workspaceSwitchTarget.sidebarLabel}
+                >
+                  <FaExchangeAlt size={11} /> {workspaceSwitchTarget.label}
+                </Link>
+              )}
               {variant === 'student' && (
                 <>
                   <Link to="/student/wishlist" className="ch-icon-btn" title="Wishlist">
