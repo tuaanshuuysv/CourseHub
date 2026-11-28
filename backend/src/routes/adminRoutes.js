@@ -106,4 +106,72 @@ router.get('/dashboard', async (_req, res, next) => {
   }
 });
 
+// Lay bao cao doi soat doanh thu toan san (gia ban, tro gia coupon, thuc thu, chi tra 80% giang vien) va so don hang
+router.get('/earnings', async (req, res, next) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 10));
+
+    const [orders, total, completedOrders] = await Promise.all([
+      Order.find({})
+        .populate('user', 'name email pfpImg')
+        .populate('courses.course', 'title')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Order.countDocuments({}),
+      Order.find({ status: 'completed' }).select('subTotal discountAmount totalAmount courses createdAt'),
+    ]);
+
+    let grossSales = 0;
+    let couponDiscounts = 0;
+    let netCollected = 0;
+    let educatorPayouts = 0;
+    const monthlyCollected = Array(12).fill(0);
+
+    for (const ord of completedOrders) {
+      const itemsSum = (ord.courses || []).reduce((sum, item) => sum + Number(item.pricePaid || 0), 0);
+      const sub = Number(ord.subTotal ?? itemsSum);
+      const disc = Number(ord.discountAmount || 0);
+      const collected = Number(ord.totalAmount || 0);
+
+      grossSales = Number((grossSales + sub).toFixed(2));
+      couponDiscounts = Number((couponDiscounts + disc).toFixed(2));
+      netCollected = Number((netCollected + collected).toFixed(2));
+
+      for (const item of ord.courses || []) {
+        const netEdu = Number((Number(item.pricePaid || 0) * 0.8).toFixed(2));
+        educatorPayouts = Number((educatorPayouts + netEdu).toFixed(2));
+      }
+
+      const mIdx = new Date(ord.createdAt).getMonth();
+      monthlyCollected[mIdx] = Number((monthlyCollected[mIdx] + collected).toFixed(2));
+    }
+
+    const platformNetCommission = Number((netCollected - educatorPayouts).toFixed(2));
+
+    return res.json({
+      stats: {
+        grossSales,
+        couponDiscounts,
+        netCollected,
+        grossRevenue: netCollected,
+        educatorPayouts,
+        platformNetCommission,
+        completedOrdersCount: completedOrders.length,
+      },
+      monthlyRevenue: MONTH_LABELS.map((month, idx) => ({ month, amount: monthlyCollected[idx] })),
+      orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
