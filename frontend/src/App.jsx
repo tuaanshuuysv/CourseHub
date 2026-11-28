@@ -24,6 +24,7 @@ import EducatorProfilePage from '@/pages/educator/EducatorProfilePage';
 import EducatorSettingsPage from '@/pages/educator/EducatorSettingsPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import AdminCoursesPage from '@/pages/admin/AdminCoursesPage';
+import AdminCategoriesPage from '@/pages/admin/AdminCategoriesPage';
 
 // Thanh thong bao nhanh hien thi trang thai thao tac toan cuc
 function ToastBanner() {
@@ -222,6 +223,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminCoursesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/categories"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminCategoriesPage />
             </ProtectedRoute>
           }
         />
