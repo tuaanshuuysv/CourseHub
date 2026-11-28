@@ -174,4 +174,52 @@ router.get('/earnings', async (req, res, next) => {
   }
 });
 
+// Lay danh sach khoa hoc kiem duyet kem tim kiem, loc trang thai, phan trang va thong ke so luong
+router.get('/courses', async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const status = typeof req.query.status === 'string' ? req.query.status.trim() : 'All';
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 10));
+
+    const filter = { isDeleted: false };
+    if (status && status !== 'All' && VALID_COURSE_STATUSES.includes(status)) {
+      filter.status = status;
+    }
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), 'i');
+      filter.$or = [{ title: rx }, { subtitle: rx }, { 'instructor.name': rx }];
+    }
+
+    const [courses, total, counts] = await Promise.all([
+      Course.find(filter)
+        .select('-curriculum')
+        .populate('category', 'name slug color')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Course.countDocuments(filter),
+      Course.aggregate([
+        { $match: { isDeleted: false } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const statusCounts = Object.fromEntries(counts.map((c) => [c._id, c.count]));
+    return res.json({
+      courses,
+      total,
+      statusCounts,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
