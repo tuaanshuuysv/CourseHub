@@ -18,6 +18,7 @@ import Review from '../models/Review.js';
 import { authenticate, requireRole, requireStudent, setAuthCookie, signToken } from '../middleware/auth.js';
 import { AVATARS_DIR, CERTIFICATES_DIR, uploadAvatar, uploadCertificate } from '../middleware/upload.js';
 import { isSmtpConfigured, sendOrderConfirmationEmail } from '../services/emailService.js';
+import { formatLearningStreak } from '../utils/streakHelper.js';
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -43,7 +44,7 @@ router.get('/profile', async (req, res, next) => {
     return res.json({
       user,
       student: student || null,
-      streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
+      streak: formatLearningStreak(streak),
       instructorApplication: instructor
         ? {
             isApproved: instructor.isApproved,
@@ -725,7 +726,7 @@ router.get('/my-courses', async (req, res, next) => {
 
     return res.json({
       courses: enrolled,
-      streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
+      streak: formatLearningStreak(streak),
       stats: student?.stats || { totalCourses: 0, completedCourses: 0, totalLessons: 0, completedLessons: 0 },
     });
   } catch (err) {
@@ -801,7 +802,7 @@ router.get('/learning/:courseId', async (req, res, next) => {
     return res.json({
       course: sanitizeCourseForLearning(course),
       progress,
-      streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
+      streak: formatLearningStreak(streak),
     });
   } catch (err) {
     return next(err);
@@ -947,7 +948,7 @@ router.post('/learning/:courseId/progress', async (req, res, next) => {
 
     return res.json({
       progress,
-      streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
+      streak: formatLearningStreak(streak),
     });
   } catch (err) {
     return next(err);

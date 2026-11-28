@@ -10,6 +10,7 @@ import Cart from '../models/Cart.js';
 import LearningStreak from '../models/LearningStreak.js';
 import { authenticate, clearAuthCookie, setAuthCookie, signToken } from '../middleware/auth.js';
 import { sendOtpEmail } from '../services/emailService.js';
+import { formatLearningStreak } from '../utils/streakHelper.js';
 
 const router = express.Router();
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -455,7 +456,7 @@ router.get('/me', authenticate, async (req, res, next) => {
         socials: account.socials,
         website: account.website,
       },
-      streak: streak || { currentStreak: 0, longestStreak: 0, activeDates: [] },
+      streak: formatLearningStreak(streak),
       instructorApplication: instructor
         ? { isApproved: instructor.isApproved, occupation: instructor.occupation }
         : null,

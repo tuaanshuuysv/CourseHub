@@ -219,12 +219,15 @@ router.get('/dashboard', async (req, res, next) => {
     const courseIds = ownedCourses.map((c) => c._id);
     const ownedIdSet = new Set(courseIds.map((id) => String(id)));
 
-    const orders =
+    const [orders, uniqueStudentsCount] =
       courseIds.length > 0
-        ? await Order.find({ status: 'completed', 'courses.course': { $in: courseIds } }).select(
-            'courses createdAt'
-          )
-        : [];
+        ? await Promise.all([
+            Order.find({ status: 'completed', 'courses.course': { $in: courseIds } }).select(
+              'courses createdAt'
+            ),
+            Student.countDocuments({ 'myCourses.course': { $in: courseIds } }),
+          ])
+        : [[], 0];
 
     const monthly = Array(12).fill(0);
     let totalRevenue = 0;
@@ -258,7 +261,8 @@ router.get('/dashboard', async (req, res, next) => {
         totalCourses: ownedCourses.length,
         liveCourses: ownedCourses.filter((c) => c.status === 'Live').length,
         pendingCourses: ownedCourses.filter((c) => c.status === 'Pending').length,
-        totalStudents: ownedCourses.reduce((sum, c) => sum + (c.studentsEnrolled || 0), 0),
+        totalStudents: uniqueStudentsCount,
+        totalEnrollments: ownedCourses.reduce((sum, c) => sum + (c.studentsEnrolled || 0), 0),
         totalRevenue,
         averageRating,
       },
