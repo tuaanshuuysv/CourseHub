@@ -565,4 +565,34 @@ router.patch('/instructors/:userId/status', async (req, res, next) => {
   }
 });
 
+// Lay danh sach don dang ky tro thanh giang vien dang cho duyet kem kinh nghiem va chung chi
+router.get('/instructor-requests', async (_req, res, next) => {
+  try {
+    const requests = await Instructor.find({ isApproved: false })
+      .populate('user', 'name email pfpImg phonenumber createdAt')
+      .sort({ createdAt: -1 });
+
+    return res.json(
+      requests
+        .filter((r) => Boolean(r.user))
+        .map((r) => ({
+          id: r._id,
+          userId: r.user._id,
+          name: r.user.name,
+          email: r.user.email,
+          phonenumber: r.user.phonenumber || '',
+          avatar: r.user.pfpImg,
+          occupation: r.occupation,
+          introduction: r.introduction,
+          address: r.address || '',
+          workExperience: r.workExperience || [],
+          certificates: r.certificates || [],
+          createdAt: r.createdAt,
+        }))
+    );
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
