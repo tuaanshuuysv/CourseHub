@@ -718,4 +718,21 @@ router.patch('/coupons/:id/toggle', async (req, res, next) => {
   }
 });
 
+// Xoa ma giam gia khoi he thong (lich su don hang da luu snapshot nen khong bi anh huong)
+router.delete('/coupons/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid couponId' });
+    }
+
+    const deleted = await Coupon.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Coupon not found' });
+    }
+    return res.json({ message: 'Coupon deleted successfully' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
