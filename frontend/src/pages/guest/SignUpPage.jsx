@@ -73,7 +73,7 @@ export default function SignUpPage() {
   };
 
   return (
-    <AuthShell title="Create your CourseHub account" subtitle="Register and verify via Email OTP (UC-1.1).">
+    <AuthShell title="Create your CourseHub account" subtitle="Register and verify via Email OTP.">
       {error && (
         <div className="ch-badge ch-badge--danger" style={{ width: '100%', padding: '10px 14px', borderRadius: 12, marginBottom: 14 }}>
           {error}

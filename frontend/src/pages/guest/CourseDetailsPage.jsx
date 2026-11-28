@@ -292,7 +292,7 @@ export default function CourseDetailsPage({ insideStudent = false }) {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <strong style={{ fontSize: '0.9rem' }}>Rate this course (UC-3.9)</strong>
+                <strong style={{ fontSize: '0.9rem' }}>Rate this course</strong>
                 <select
                   className="ch-select"
                   style={{ width: 155 }}

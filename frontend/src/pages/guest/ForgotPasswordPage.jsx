@@ -53,7 +53,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <AuthShell title="Reset your password" subtitle="Verify Email OTP and set a new password (UC-1.2).">
+    <AuthShell title="Reset your password" subtitle="Verify Email OTP and set a new password.">
       {error && (
         <div className="ch-badge ch-badge--danger" style={{ width: '100%', padding: '10px 14px', borderRadius: 12, marginBottom: 14 }}>
           {error}
