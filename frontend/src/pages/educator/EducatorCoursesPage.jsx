@@ -177,13 +177,19 @@ export default function EducatorCoursesPage() {
                         <span className={`ch-badge ${getStatusBadgeClass(c.status)}`}>{c.status}</span>
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <Link to={`/instructor/courses/${c._id}`} className="ch-btn ch-btn--sm ch-btn--outline">
-                            <FaEye /> Details
-                          </Link>
-                          <Link to={`/instructor/edit-course/${c._id}`} className="ch-btn ch-btn--sm ch-btn--primary">
-                            <FaEdit /> Edit
-                          </Link>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                          {c.status === 'Blocked' ? (
+                            <span className="ch-badge ch-badge--danger">Locked by Admin</span>
+                          ) : (
+                            <>
+                              <Link to={`/instructor/courses/${c._id}`} className="ch-btn ch-btn--sm ch-btn--outline">
+                                <FaEye /> Details
+                              </Link>
+                              <Link to={`/instructor/edit-course/${c._id}`} className="ch-btn ch-btn--sm ch-btn--primary">
+                                <FaEdit /> Edit
+                              </Link>
+                            </>
+                          )}
                           <button
                             type="button"
                             disabled={deletingId === c._id}

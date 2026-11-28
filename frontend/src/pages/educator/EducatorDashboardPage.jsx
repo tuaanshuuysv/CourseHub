@@ -180,20 +180,19 @@ export default function EducatorDashboardPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {data.courses.slice(0, 5).map((c) => {
                 const price = getEffectivePrice(c);
-                return (
-                  <Link
-                    key={c._id}
-                    to={`/instructor/courses/${c._id}`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: 10,
-                      borderRadius: 12,
-                      border: '1px solid var(--border)',
-                      background: 'var(--bg-canvas)',
-                    }}
-                  >
+                const isBlocked = c.status === 'Blocked';
+                const rowStyle = {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: 10,
+                  borderRadius: 12,
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-canvas)',
+                  opacity: isBlocked ? 0.72 : 1,
+                };
+                const rowContent = (
+                  <>
                     <img
                       src={c.thumbnail || '/media/courses/01.jpg'}
                       alt={c.title}
@@ -216,6 +215,15 @@ export default function EducatorDashboardPage() {
                       </div>
                     </div>
                     <span className={`ch-badge ${getStatusBadgeClass(c.status)}`}>{c.status}</span>
+                  </>
+                );
+                return isBlocked ? (
+                  <div key={c._id} style={rowStyle} title="Blocked by Administrator">
+                    {rowContent}
+                  </div>
+                ) : (
+                  <Link key={c._id} to={`/instructor/courses/${c._id}`} style={rowStyle}>
+                    {rowContent}
                   </Link>
                 );
               })}
