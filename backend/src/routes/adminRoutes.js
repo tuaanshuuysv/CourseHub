@@ -637,4 +637,18 @@ router.patch('/instructor-requests/:id', async (req, res, next) => {
   }
 });
 
+// Lay danh sach ma giam gia khuyen mai tren he thong kem tim kiem theo ma hoac mo ta
+router.get('/coupons', async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const filter = q
+      ? { $or: [{ code: new RegExp(escapeRegex(q), 'i') }, { description: new RegExp(escapeRegex(q), 'i') }] }
+      : {};
+    const coupons = await Coupon.find(filter).sort({ createdAt: -1 });
+    return res.json(coupons);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
