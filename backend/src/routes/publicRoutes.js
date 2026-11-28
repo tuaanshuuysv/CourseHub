@@ -193,9 +193,78 @@ router.get('/courses/:id', optionalAuth, async (req, res, next) => {
       return res.status(404).json({ message: 'Course not found' });
     }
 
-    const reviews = await Review.find({ course: course._id, isDeleted: false })
-      .populate('user', 'name pfpImg')
-      .sort({ createdAt: -1 });
+    const [reviews, instructorUser, instructorDoc, instructorLiveCourses] = await Promise.all([
+      Review.find({ course: course._id, isDeleted: false })
+        .populate('user', 'name pfpImg')
+        .sort({ createdAt: -1 }),
+      User.findById(course.instructor.ref).select('name pfpImg bio website socials'),
+      Instructor.findOne({ user: course.instructor.ref }),
+      Course.find({
+        'instructor.ref': course.instructor.ref,
+        status: 'Live',
+        isDeleted: false,
+        isPrivate: false,
+      }).select('_id rating'),
+    ]);
+
+    const instructorLiveIds = instructorLiveCourses.map((c) => c._id);
+    const uniqueInstructorStudents =
+      instructorLiveIds.length > 0
+        ? await Student.countDocuments({ 'myCourses.course': { $in: instructorLiveIds } })
+        : 0;
+    const ratedInstructorCourses = instructorLiveCourses.filter((c) => (c.rating?.count || 0) > 0);
+    const instructorAvgRating =
+      ratedInstructorCourses.length > 0
+        ? Number(
+            (
+              ratedInstructorCourses.reduce((sum, c) => sum + Number(c.rating?.average || 0), 0) /
+              ratedInstructorCourses.length
+            ).toFixed(1)
+          )
+        : 0;
+    const totalInstructorReviews = instructorLiveCourses.reduce(
+      (sum, c) => sum + Number(c.rating?.count || 0),
+      0
+    );
+
+    // Chuan hoa ho so cong khai cua giang vien (an thong tin lien he rieng tu va cap tren cu)
+    const instructorProfile = {
+      id: instructorUser?._id || course.instructor?.ref || null,
+      name: instructorUser?.name || course.instructor?.name || 'Educator',
+      avatar: instructorUser?.pfpImg || course.instructor?.avatar || '/media/avatar/01.jpg',
+      bio: instructorUser?.bio || '',
+      website: instructorUser?.website || '',
+      socials: instructorUser?.socials || {},
+      occupation: instructorDoc?.occupation || '',
+      introduction: instructorDoc?.introduction || '',
+      address: instructorDoc?.address || '',
+      isApproved: Boolean(instructorDoc?.isApproved),
+      education: (instructorDoc?.education || []).map((ed) => ({
+        degree: ed.degree || '',
+        fieldOfStudy: ed.fieldOfStudy || '',
+        institution: ed.institution || '',
+      })),
+      skills: (instructorDoc?.skills || []).map((sk) => ({
+        name: sk.name || '',
+        level: Number(sk.level || 0),
+      })),
+      workExperience: (instructorDoc?.workExperience || []).map((exp) => ({
+        organization: exp.organization || '',
+        position: exp.position || '',
+        startDate: exp.startDate || '',
+        endDate: exp.endDate || 'Present',
+      })),
+      certificates: (instructorDoc?.certificates || []).map((cert) => ({
+        name: cert.name || '',
+        imageUrl: cert.imageUrl || '',
+      })),
+      stats: {
+        liveCoursesCount: instructorLiveCourses.length,
+        studentsCount: uniqueInstructorStudents,
+        averageRating: instructorAvgRating,
+        reviewsCount: totalInstructorReviews,
+      },
+    };
 
     const obj = course.toObject();
     if (!isOwner && !isAdmin) {
@@ -218,6 +287,7 @@ router.get('/courses/:id', optionalAuth, async (req, res, next) => {
     return res.json({
       course: obj,
       reviews,
+      instructorProfile,
       isEnrolled: hasFullAccess,
     });
   } catch (err) {
