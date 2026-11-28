@@ -470,4 +470,69 @@ router.patch('/students/:id/status', async (req, res, next) => {
   }
 });
 
+// Lay danh sach giang vien da duyet kem so khoa so huu va so hoc vien duy nhat thuc te
+router.get('/instructors', async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().toLowerCase() : '';
+
+    const [instructors, courses, students] = await Promise.all([
+      Instructor.find({ isApproved: true })
+        .populate('user', 'name email pfpImg isActivated createdAt')
+        .sort({ createdAt: -1 }),
+      Course.find({ isDeleted: false }).select('_id instructor.ref status'),
+      Student.find({}).select('user myCourses'),
+    ]);
+
+    // Anh xa danh sach userId hoc vien theo tung courseId de dem so hoc vien duy nhat cho moi giang vien
+    const learnersByCourse = new Map();
+    for (const st of students) {
+      const uid = String(st.user);
+      for (const m of st.myCourses || []) {
+        const cid = String(m.course);
+        if (!learnersByCourse.has(cid)) learnersByCourse.set(cid, new Set());
+        learnersByCourse.get(cid).add(uid);
+      }
+    }
+
+    let rows = instructors
+      .filter((ins) => Boolean(ins.user))
+      .map((ins) => {
+        const owned = courses.filter((c) => String(c.instructor?.ref) === String(ins.user._id));
+        const uniqueStudents = new Set();
+        for (const c of owned) {
+          const set = learnersByCourse.get(String(c._id));
+          if (set) {
+            for (const uid of set) uniqueStudents.add(uid);
+          }
+        }
+        return {
+          id: ins.user._id,
+          instructorDocId: ins._id,
+          name: ins.user.name,
+          email: ins.user.email,
+          avatar: ins.user.pfpImg,
+          occupation: ins.occupation || '',
+          coursesCount: owned.length,
+          liveCoursesCount: owned.filter((c) => c.status === 'Live').length,
+          studentsCount: uniqueStudents.size,
+          isActivated: ins.user.isActivated,
+          createdAt: ins.user.createdAt,
+        };
+      });
+
+    if (q) {
+      rows = rows.filter(
+        (r) =>
+          r.name.toLowerCase().includes(q) ||
+          r.email.toLowerCase().includes(q) ||
+          r.occupation.toLowerCase().includes(q)
+      );
+    }
+
+    return res.json(rows);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
