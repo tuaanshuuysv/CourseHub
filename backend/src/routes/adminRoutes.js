@@ -278,4 +278,33 @@ router.get('/categories', async (req, res, next) => {
   }
 });
 
+// Tao moi danh muc khoa hoc va chong trung ten hoac duong dan slug
+router.post('/categories', async (req, res, next) => {
+  try {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
+    const color = typeof req.body?.color === 'string' && req.body.color.trim() ? req.body.color.trim() : '#0f766e';
+
+    if (!name) {
+      return res.status(400).json({ message: 'Category name is required' });
+    }
+    const slug = makeSlug(name);
+    if (!slug) {
+      return res.status(400).json({ message: 'Category name must contain alphanumeric characters' });
+    }
+
+    const exists = await Category.findOne({
+      $or: [{ name: new RegExp('^' + escapeRegex(name) + '$', 'i') }, { slug }],
+    });
+    if (exists) {
+      return res.status(409).json({ message: 'Category name or slug already exists' });
+    }
+
+    const category = await Category.create({ name, slug, description, color, isActive: true });
+    return res.status(201).json({ message: 'Category created successfully', category });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 export default router;
